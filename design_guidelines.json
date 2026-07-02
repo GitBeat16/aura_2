@@ -1,0 +1,186 @@
+{
+  "app_name": "Aura",
+  "personality": "8 Hand-Drawn / Journal structure with 1 iOS-Native Clean minimal spacing and soft pastel gradients",
+  "personality_one_liner": "A quiet, empathetic digital space that feels like a calming breath, blending tactile journaling warmth with minimalist clarity.",
+  "color": {
+    "surface": "#FDFBF7",
+    "onSurface": "#2A2A28",
+    "surfaceSecondary": "#F5F2EA",
+    "onSurfaceSecondary": "#3D3D3A",
+    "surfaceTertiary": "#EAE5D9",
+    "onSurfaceTertiary": "#5C5C58",
+    "surfaceInverse": "#2A2A28",
+    "onSurfaceInverse": "#FDFBF7",
+    "brand": "#9EADA0",
+    "brandPrimary": "#9EADA0",
+    "onBrandPrimary": "#1D261F",
+    "brandSecondary": "#D8AE99",
+    "onBrandSecondary": "#302018",
+    "brandTertiary": "#D9DCE0",
+    "onBrandTertiary": "#26282B",
+    "success": "#A7C4A5",
+    "onSuccess": "#1F301E",
+    "warning": "#E0C09A",
+    "onWarning": "#3D2910",
+    "error": "#D69595",
+    "onError": "#381414",
+    "info": "#A6BACC",
+    "onInfo": "#17232E",
+    "border": "#EAE5D9",
+    "borderStrong": "#D1CCC0",
+    "divider": "#EAE5D9"
+  },
+  "typography": {
+    "displayFontFamily": "Fraunces",
+    "textFontFamily": "Nunito",
+    "scale": {
+      "sm": 12,
+      "base": 14,
+      "lg": 16,
+      "xl": 20,
+      "2xl": 24
+    }
+  },
+  "spacing": {
+    "rule": "Generous vertical breathing room. Avoid dense clusters; give emotional prompts space to be absorbed.",
+    "xs": 4,
+    "sm": 8,
+    "md": 12,
+    "lg": 16,
+    "xl": 24,
+    "2xl": 32,
+    "3xl": 48
+  },
+  "radius_tokens": {
+    "sm": 6,
+    "md": 12,
+    "lg": 20,
+    "pill": 999
+  },
+  "shadow_tier": "0",
+  "navigation": "bottom_tabs",
+  "icon_set": "Feather",
+  "glassmorphism": {
+    "enabled": true,
+    "do's": [
+      "Use over the bottom tab bar so content scrolls softly behind",
+      "Use for the sticky top headers on the Home and Chat screens",
+      "Use as a backing container for sticky bottom CTAs"
+    ],
+    "dont's": [
+      "Do not use on regular cards or chat bubbles",
+      "Do not use on form inputs"
+    ]
+  },
+  "platform_libraries": {
+    "glass": {
+      "ios": "expo-glass-effect",
+      "android": "expo-blur",
+      "low_end_android_fallback": "solid surfaceSecondary"
+    },
+    "image": "expo-image",
+    "blur": "expo-blur",
+    "bottom_sheet": "@gorhom/bottom-sheet",
+    "animation": "react-native-reanimated",
+    "gesture": "react-native-gesture-handler"
+  },
+  "screens": [
+    {
+      "name": "Onboarding",
+      "purpose": "Establish a calming, safe space instantly with a soothing full-bleed pastel image and empathetic messaging.",
+      "states": {
+        "loading": "Centered soft spinner",
+        "empty": "N/A",
+        "error": "N/A"
+      },
+      "layout": "Full-bleed image background covering the safe area. A top-down transparent-to-dark scrim (gradient) is mandatory over the bottom 50%. The primary CTA (Get Started) sits at the very bottom inside the safe area, using brandPrimary, styled as a pill button."
+    },
+    {
+      "name": "Auth",
+      "purpose": "Low-friction, low-cognitive-load login and signup.",
+      "states": {
+        "loading": "Inline button spinner",
+        "empty": "N/A",
+        "error": "Soft inline error text below input"
+      },
+      "layout": "Single column layout. Generous top padding. Inputs use surfaceSecondary backgrounds with no borders, deeply rounded corners (lg). Large, friendly typographic hierarchy."
+    },
+    {
+      "name": "MoodCheckIn",
+      "purpose": "Allow the user to log their emotional state using soft, un-intimidating interactions.",
+      "states": {
+        "loading": "Spinner in center",
+        "empty": "N/A",
+        "error": "Toast with retry"
+      },
+      "layout": "A full-screen modal or dedicated screen. Large display typography asking 'How are you feeling?'. Use a grid of oversized pill-shaped chips for moods, or a large horizontal slider. Colors of chips shift between pastel sage, peach, and sky blue depending on the mood type."
+    },
+    {
+      "name": "Home",
+      "purpose": "A personalized dashboard that ties the user's mood to immediate, bite-sized actions.",
+      "states": {
+        "loading": "Skeleton cards mimicking the layout structure",
+        "empty": "Illustration of a quiet room, 'Let's check in on how you're doing.'",
+        "error": "Friendly text 'We lost connection, pull to refresh' + Retry button"
+      },
+      "layout": "Top section: Glass header greeting + current mood recap. Middle section: A prominent 'Chat with AI' call-out card, using a soft 2-stop gradient (surface to brandTertiary at 10% opacity). Lower sections: Horizontal scroll for 'Daily Actions' (small squarish cards) and a vertical list for 'Social Connections'."
+    },
+    {
+      "name": "Chat",
+      "purpose": "Empathetic, streaming AI companion conversation.",
+      "states": {
+        "loading": "Three pulsing dots in a chat bubble",
+        "empty": "A soft welcome prompt from the AI, e.g., 'I'm here to listen.'",
+        "error": "Error icon next to the failed message with a tap-to-retry prompt"
+      },
+      "layout": "Standard chat interface but softened. AI bubbles use surfaceSecondary, user bubbles use brandTertiary. Bubbles have generous padding (lg) and asymmetrical radii (e.g., bottom-left smaller for AI). Input field is a floating pill resting above the keyboard with a subtle blur background."
+    },
+    {
+      "name": "EventDiscovery",
+      "purpose": "Encourage real-world or virtual connection through curated wellness events.",
+      "states": {
+        "loading": "Skeleton event cards",
+        "empty": "Soft illustration + 'No events in your area just yet.'",
+        "error": "Error text + Retry CTA"
+      },
+      "layout": "Vertical scroll. Event cards use edge-to-edge images at the top half with a gradient scrim protecting the 'Date/Time' badge. Bottom half is surfaceSecondary with the title, location, and a prominent 'Join' CTA."
+    }
+  ],
+  "images": {
+    "onboarding_hero": {
+      "url": "https://images.unsplash.com/photo-1474540412665-1cdae210ae6b?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjY2NjV8MHwxfHNlYXJjaHwxfHxjYWxtJTIwbWluaW1hbGlzdCUyMHNreSUyMHBhc3RlbHxlbnwwfHx8fDE3ODI4NTA4NTh8MA&ixlib=rb-4.1.0&q=85",
+      "alt": "Soft minimalist pastel sea and sky"
+    },
+    "social_connection_card": {
+      "url": "https://images.pexels.com/photos/6340713/pexels-photo-6340713.jpeg",
+      "alt": "Three young adults enjoying coffee"
+    },
+    "action_nature_walk": {
+      "url": "https://images.unsplash.com/photo-1594048023785-02c76ee32c10",
+      "alt": "Green grass and trees during daytime"
+    },
+    "action_meditation": {
+      "url": "https://images.pexels.com/photos/21032118/pexels-photo-21032118.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940",
+      "alt": "Abstract warm sunset ocean seascape"
+    }
+  },
+  "haptics": {
+    "events": {
+      "tab_press": "light",
+      "mood_chip_select": "medium",
+      "action_card_check": "success",
+      "chat_send": "light",
+      "primary_button_press": "medium"
+    }
+  },
+  "instructions_to_main_agent": [
+    "CRITICAL: Follow the '8 Hand-Drawn / Journal' design guidelines. The UI should feel soft, tactile, and calming.",
+    "NO TOLERANCE: Do not use pure white or pure black. Adhere strictly to the provided color palette (surface is #FDFBF7, onSurface is #2A2A28).",
+    "NO TOLERANCE: Do not use Indigo, Violet, Purple, or Blue tokens. The palette is strictly pastel Sage, Peach, and soft Sky (gray-blue) as accents.",
+    "IMAGERY: For any image with overlaid text (like the onboarding hero or event cards), you MUST implement the gradient-to-dark scrim pattern (transparent to >=70% surfaceInverse at the bottom) to guarantee text contrast.",
+    "TYPOGRAPHY: Use Fraunces (serif) for display/headings to add an editorial, journaling feel, and Nunito (sans-serif) for high-readability body text.",
+    "LAYOUT: Apply generous padding. Elements shouldn't feel crowded. Use soft `md` to `lg` border radii, keeping it friendly.",
+    "CHAT UI: Ensure chat bubbles are well-padded, not tight. Do not use default iOS green/blue; stick to `surfaceSecondary` for AI and `brandTertiary` for the User.",
+    "HAPTICS: Implement the haptic feedback mapping defined in the JSON for tactile engagement without overwhelming the user."
+  ]
+}
