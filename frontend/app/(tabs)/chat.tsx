@@ -15,6 +15,7 @@ import {
 import { theme } from "@/src/theme";
 import { api, ChatMsg } from "@/src/api";
 import { LumiCharacter, LumiEmotion, LumiState } from "@/src/components/LumiCharacter";
+import { playSfx, isAmbientOn, toggleAmbient } from "@/src/utils/sounds";
 
 type Mode = "voice" | "text";
 
@@ -29,6 +30,7 @@ export default function LumiScreen() {
   const [textInput, setTextInput] = useState("");
   const [permission, setPermission] = useState<boolean | null>(null);
   const [errorText, setErrorText] = useState<string | null>(null);
+  const [ambient, setAmbient] = useState<boolean>(isAmbientOn());
 
   const recorder = useAudioRecorder(RecordingPresets.HIGH_QUALITY);
   const player = useAudioPlayer(null);
@@ -98,6 +100,7 @@ export default function LumiScreen() {
     setReply("");
     setState("thinking");
     setEmotion("thoughtful");
+    playSfx("send", 0.4);
 
     // Optimistic user bubble
     const tempUser: ChatMsg = {
@@ -114,11 +117,18 @@ export default function LumiScreen() {
       setEmotion(em);
       setMessages((prev) => {
         const filtered = prev.filter((m) => m.id !== tempUser.id);
-        return [...filtered, res.user_message, res.assistant_message];
+        const next = [...filtered, res.user_message, res.assistant_message];
+        // Trigger a task regen every 5 user messages (fire-and-forget)
+        const userTurns = next.filter((m) => m.role === "user").length;
+        if (userTurns > 0 && userTurns % 5 === 0) {
+          api.regenerateActions().catch(() => {});
+        }
+        return next;
       });
       if (wantVoice && res.audio_base64) {
         await playBase64(res.audio_base64);
       } else {
+        playSfx("chime", 0.35);
         setState("idle");
       }
     } catch (e: any) {
@@ -221,14 +231,23 @@ export default function LumiScreen() {
                 state === "speaking" ? "Speaking" : "Here with you"}
             </Text>
           </View>
-          <Pressable
-            testID="lumi-mode-toggle"
-            onPress={() => setMode(mode === "voice" ? "text" : "voice")}
-            style={styles.modeBtn}
-          >
-            <Feather name={mode === "voice" ? "type" : "mic"} size={16} color={theme.colors.onSurface} />
-            <Text style={styles.modeText}>{mode === "voice" ? "Type" : "Voice"}</Text>
-          </Pressable>
+          <View style={styles.headerRight}>
+            <Pressable
+              testID="lumi-ambient-toggle"
+              onPress={async () => { const on = await toggleAmbient(); setAmbient(on); }}
+              style={styles.modeBtn}
+            >
+              <Feather name={ambient ? "volume-2" : "volume-x"} size={16} color={theme.colors.onSurface} />
+            </Pressable>
+            <Pressable
+              testID="lumi-mode-toggle"
+              onPress={() => setMode(mode === "voice" ? "text" : "voice")}
+              style={styles.modeBtn}
+            >
+              <Feather name={mode === "voice" ? "type" : "mic"} size={16} color={theme.colors.onSurface} />
+              <Text style={styles.modeText}>{mode === "voice" ? "Type" : "Voice"}</Text>
+            </Pressable>
+          </View>
         </View>
 
         {/* Character */}
@@ -392,6 +411,7 @@ const styles = StyleSheet.create({
     flexDirection: "row", alignItems: "center", gap: 6,
     backgroundColor: theme.colors.surfaceSecondary, paddingHorizontal: 14, paddingVertical: 8, borderRadius: theme.radius.pill,
   },
+  headerRight: { flexDirection: "row", alignItems: "center", gap: theme.spacing.sm },
   modeText: { fontFamily: theme.font.body, fontSize: 12, fontWeight: "600", color: theme.colors.onSurface },
   characterArea: {
     alignItems: "center", justifyContent: "center", height: 300, marginBottom: theme.spacing.md,

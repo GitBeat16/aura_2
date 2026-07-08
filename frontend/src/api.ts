@@ -99,6 +99,7 @@ export const api = {
   currentSession: () => request<{ session_id: string | null }>("/chat/current_session"),
 
   dailyActions: () => request<DailyAction[]>("/actions/daily"),
+  regenerateActions: () => request<DailyAction[]>("/actions/regenerate", { method: "POST" }),
   completeAction: (title: string) =>
     request<{ action_id: string; completed: boolean; completed_at: string }>(
       "/actions/complete", { method: "POST", body: { title } }

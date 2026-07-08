@@ -7,6 +7,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import * as Haptics from "expo-haptics";
 import { theme, MOODS } from "@/src/theme";
 import { api } from "@/src/api";
+import { playSfx } from "@/src/utils/sounds";
 
 export default function MoodCheckin() {
   const router = useRouter();
@@ -20,7 +21,10 @@ export default function MoodCheckin() {
     setLoading(true); setError(null);
     try {
       await api.createMood(selected, note.trim() || undefined);
+      // Regenerate personalized tasks in the background — no need to await
+      api.regenerateActions().catch(() => {});
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      playSfx("chime", 0.6);
       router.replace("/(tabs)/home");
     } catch (e: any) {
       setError(e.message || "Could not save mood");
@@ -48,6 +52,7 @@ export default function MoodCheckin() {
                   testID={`mood-chip-${m.key}`}
                   onPress={() => {
                     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+                    playSfx("tap", 0.5);
                     setSelected(m.key);
                   }}
                   style={[

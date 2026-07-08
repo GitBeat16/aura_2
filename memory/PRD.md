@@ -22,6 +22,14 @@ A mobile-first AI companion for people who feel lonely or stuck. Guides users fr
 - **Text fallback**: mode toggle (Voice / Type) lets users type instead. Same conversation history, same emotion animations, no TTS.
 - **Ambient**: soft pastel gradient background + breathing halo that adapts hue per state.
 
+## v3 – Personalized dynamic tasks + Sounds (delivered)
+- **AI-generated daily tasks**: `GET /api/actions/daily` and `POST /api/actions/regenerate` now call Claude Sonnet 4.5 to produce **5–8 fully personalized micro-tasks** based on the user's latest mood, mood note, and recent conversation with Lumi. Tasks vary in category (connection/reflection/movement/care/calm/reset/growth), duration (1–30m), and icon. Cached per (user, day) in MongoDB `daily_task_sets`; regenerated whenever the user submits a new mood check-in **or** hits every 5th chat turn with Lumi. Home shows all N tasks (no artificial cap of 3) and displays "N gentle nudges · shaped by your <mood> check-in".
+- **Sound design**: 5 procedurally-synthesized CC0 WAV files bundled in `/app/frontend/assets/sounds/` (`tap.wav`, `chime.wav`, `send.wav`, `pop.wav`, `ambient.wav`) generated via `/app/scripts/generate_sounds.py`. New utility `src/utils/sounds.ts` exposes `playSfx(key)`, `toggleAmbient()`, and mute controls. Wired into:
+  - **mood-checkin**: `tap` on chip select, `chime` on submit
+  - **home**: `pop` on task complete, `tap`+`chime` on refresh
+  - **Lumi chat**: `send` when message is dispatched, `chime` on text-mode reply
+  - **ambient**: user-toggleable soft pad loop on the Lumi screen (volume icon in header)
+
 ## Backend endpoints
 | Method | Path | Auth | Purpose |
 |---|---|---|---|
@@ -36,7 +44,8 @@ A mobile-first AI companion for people who feel lonely or stuck. Guides users fr
 | GET  | /api/chat/current_session | ✅ | Get last session id |
 | POST | /api/voice/transcribe | ✅ | Whisper STT (multipart audio) |
 | POST | /api/voice/tts | ✅ | Standalone TTS (returns base64 mp3) |
-| GET  | /api/actions/daily | ✅ | Mood-personalized actions |
+| GET  | /api/actions/daily | ✅ | 5–8 AI-personalized tasks (cached per day) |
+| POST | /api/actions/regenerate | ✅ | Force new AI-generated task set |
 | POST | /api/actions/complete | ✅ | Mark action done today |
 | GET  | /api/social/suggestions | ✅ | Mood-personalized social prompts |
 | GET  | /api/events | ✅ | Curated events (optional category) |

@@ -467,13 +467,132 @@ def _today_key(user_id: str) -> str:
     return f"{user_id}:{datetime.now(timezone.utc).strftime('%Y-%m-%d')}"
 
 
+VALID_ICONS = {
+    "heart", "compass", "edit-3", "sun", "message-circle", "wind",
+    "cloud", "grid", "coffee", "droplet", "check-square", "map",
+    "anchor", "mic", "users", "message-square", "book-open", "moon",
+    "smile", "star", "feather", "camera", "music", "phone", "gift",
+    "sunrise", "sunset", "activity", "aperture",
+}
+
+
+async def _generate_ai_tasks(user: dict, mood_key: str, force: bool = False) -> List[dict]:
+    """Generate 5–8 personalized micro-tasks using Claude based on the user's
+    latest mood + last few chat exchanges with Lumi. Cached per (user, day).
+    Set force=True to regenerate."""
+    day_key = _today_key(user["id"])
+    cached = await db.daily_task_sets.find_one({"day_key": day_key}, {"_id": 0})
+    if cached and not force:
+        return cached["tasks"]
+
+    # Gather recent chat context (last 12 msgs) for personalization
+    recent_msgs = await db.chat_messages.find(
+        {"user_id": user["id"]}, {"_id": 0}
+    ).sort("created_at", -1).to_list(12)
+    recent_msgs.reverse()
+    chat_snippet = "\n".join(
+        f"{'User' if m['role']=='user' else 'Lumi'}: {m['content']}" for m in recent_msgs
+    ) or "(no conversation yet)"
+
+    latest_mood_doc = await db.moods.find_one(
+        {"user_id": user["id"]}, {"_id": 0}, sort=[("created_at", -1)]
+    )
+    mood_note = latest_mood_doc.get("note") if latest_mood_doc else None
+
+    system = (
+        "You are Lumi, a gentle AI companion. Generate a personalized set of small, "
+        "actionable micro-tasks for the user, based on their current mood and recent "
+        "conversation with you. Rules:\n"
+        "- Return ONLY a JSON array (no prose, no code fences).\n"
+        "- 5 to 8 tasks. Choose the number that feels right for the mood.\n"
+        "- Each item MUST have keys: title (max 42 chars), description (1 short warm sentence, max 90 chars), "
+        "category (one of: connection, reflection, movement, care, calm, reset, growth), "
+        "duration_minutes (integer 1-30), icon (one of: heart, compass, edit-3, sun, message-circle, wind, "
+        "cloud, grid, coffee, droplet, check-square, map, anchor, mic, users, message-square, book-open, "
+        "moon, smile, star, feather, camera, music, phone, gift, sunrise, sunset, activity, aperture).\n"
+        "- Tasks must feel doable in the next few hours. No big commitments.\n"
+        "- Vary category and duration across the set.\n"
+        "- Tone: warm, human, not clinical. No emojis. No hashtags.\n"
+        "- Reference the user's mood and chat context subtly if useful, but keep tasks generalizable."
+    )
+
+    user_prompt = (
+        f"Current mood: {mood_key}\n"
+        f"Mood note: {mood_note or '(none)'}\n\n"
+        f"Recent conversation with Lumi:\n{chat_snippet}\n\n"
+        "Return the JSON array of tasks now."
+    )
+
+    tasks: List[dict] = []
+    try:
+        chat = LlmChat(
+            api_key=EMERGENT_LLM_KEY,
+            session_id=f"tasks-{user['id']}-{day_key}",
+            system_message=system,
+        ).with_model("anthropic", "claude-sonnet-4-6")
+        raw = await chat.send_message(UserMessage(text=user_prompt))
+        # Strip code fences if any
+        cleaned = raw.strip()
+        if cleaned.startswith("```"):
+            cleaned = cleaned.strip("`")
+            # remove language tag on first line
+            if "\n" in cleaned:
+                cleaned = cleaned.split("\n", 1)[1]
+        # Extract first [...] JSON block
+        import json
+        import re
+        m = re.search(r"\[.*\]", cleaned, re.DOTALL)
+        if m:
+            cleaned = m.group(0)
+        parsed = json.loads(cleaned)
+        if isinstance(parsed, list):
+            for item in parsed:
+                if not isinstance(item, dict):
+                    continue
+                title = str(item.get("title", "")).strip()[:60]
+                desc = str(item.get("description", "")).strip()[:140]
+                cat = str(item.get("category", "reset")).strip().lower()
+                dur = item.get("duration_minutes", 5)
+                try:
+                    dur = max(1, min(30, int(dur)))
+                except Exception:
+                    dur = 5
+                icon = str(item.get("icon", "sun")).strip().lower()
+                if icon not in VALID_ICONS:
+                    icon = "sun"
+                if title and desc:
+                    tasks.append({
+                        "title": title, "description": desc, "category": cat,
+                        "duration_minutes": dur, "icon": icon,
+                    })
+    except Exception as e:
+        logger.warning(f"AI task generation failed: {e}")
+
+    # Fallback to seed list if AI produced nothing usable
+    if len(tasks) < 3:
+        seeds = DAILY_ACTIONS_BY_MOOD.get(mood_key, DAILY_ACTIONS_BY_MOOD["okay"])
+        tasks = list(seeds)
+
+    tasks = tasks[:8]
+
+    await db.daily_task_sets.replace_one(
+        {"day_key": day_key},
+        {
+            "day_key": day_key, "user_id": user["id"], "mood": mood_key,
+            "tasks": tasks, "generated_at": datetime.now(timezone.utc),
+        },
+        upsert=True,
+    )
+    return tasks
+
+
 @api_router.get("/actions/daily", response_model=List[DailyAction])
 async def daily_actions(user=Depends(get_current_user)):
     latest_mood = await db.moods.find_one(
         {"user_id": user["id"]}, {"_id": 0}, sort=[("created_at", -1)]
     )
     mood_key = latest_mood["mood"] if latest_mood else "okay"
-    seeds = DAILY_ACTIONS_BY_MOOD.get(mood_key, DAILY_ACTIONS_BY_MOOD["okay"])
+    tasks = await _generate_ai_tasks(user, mood_key)
 
     completed_docs = await db.action_completions.find(
         {"day_key": _today_key(user["id"])}, {"_id": 0}
@@ -483,14 +602,41 @@ async def daily_actions(user=Depends(get_current_user)):
     return [
         DailyAction(
             id=f"a{i}",
-            title=s["title"],
-            description=s["description"],
-            category=s["category"],
-            duration_minutes=s["duration_minutes"],
-            icon=s["icon"],
-            completed=s["title"] in completed_titles,
+            title=t["title"],
+            description=t["description"],
+            category=t["category"],
+            duration_minutes=t["duration_minutes"],
+            icon=t["icon"],
+            completed=t["title"] in completed_titles,
         )
-        for i, s in enumerate(seeds)
+        for i, t in enumerate(tasks)
+    ]
+
+
+@api_router.post("/actions/regenerate", response_model=List[DailyAction])
+async def regenerate_actions(user=Depends(get_current_user)):
+    latest_mood = await db.moods.find_one(
+        {"user_id": user["id"]}, {"_id": 0}, sort=[("created_at", -1)]
+    )
+    mood_key = latest_mood["mood"] if latest_mood else "okay"
+    tasks = await _generate_ai_tasks(user, mood_key, force=True)
+
+    completed_docs = await db.action_completions.find(
+        {"day_key": _today_key(user["id"])}, {"_id": 0}
+    ).to_list(50)
+    completed_titles = {d["action_title"] for d in completed_docs}
+
+    return [
+        DailyAction(
+            id=f"a{i}",
+            title=t["title"],
+            description=t["description"],
+            category=t["category"],
+            duration_minutes=t["duration_minutes"],
+            icon=t["icon"],
+            completed=t["title"] in completed_titles,
+        )
+        for i, t in enumerate(tasks)
     ]
 
 

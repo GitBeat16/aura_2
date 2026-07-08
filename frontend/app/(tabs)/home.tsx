@@ -10,6 +10,7 @@ import { LinearGradient } from "expo-linear-gradient";
 import { theme, MOODS } from "@/src/theme";
 import { api, DailyAction, Mood, SocialSuggestion } from "@/src/api";
 import { useAuth } from "@/src/auth";
+import { playSfx } from "@/src/utils/sounds";
 
 export default function Home() {
   const router = useRouter();
@@ -19,6 +20,8 @@ export default function Home() {
   const [social, setSocial] = useState<SocialSuggestion[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+
+  const [refreshingTasks, setRefreshingTasks] = useState(false);
 
   const load = useCallback(async () => {
     try {
@@ -32,6 +35,18 @@ export default function Home() {
       setSocial(s);
     } catch (e) {
       // fail silent
+    }
+  }, []);
+
+  const regenerateTasks = useCallback(async () => {
+    setRefreshingTasks(true);
+    playSfx("tap", 0.5);
+    try {
+      const fresh = await api.regenerateActions();
+      setActions(fresh);
+      playSfx("chime", 0.5);
+    } catch {} finally {
+      setRefreshingTasks(false);
     }
   }, []);
 
@@ -50,6 +65,7 @@ export default function Home() {
   const toggleAction = async (a: DailyAction) => {
     if (a.completed) return;
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    playSfx("pop", 0.6);
     setActions((prev) => prev.map((x) => x.title === a.title ? { ...x, completed: true } : x));
     try { await api.completeAction(a.title); } catch {}
   };
@@ -134,7 +150,25 @@ export default function Home() {
         </Pressable>
 
         {/* Daily actions */}
-        <Section title="Small steps for today" subtitle="One at a time. No pressure." />
+        <View style={styles.sectionRow}>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.sectionTitle}>Small steps for today</Text>
+            <Text style={styles.sectionSubtitle}>
+              {actions.length > 0 ? `${actions.length} gentle nudges` : "One at a time. No pressure."}
+              {mood ? ` · shaped by your ${MOODS.find((x) => x.key === mood.mood)?.label.toLowerCase()} check-in` : ""}
+            </Text>
+          </View>
+          <Pressable
+            testID="home-regen-tasks-button"
+            onPress={regenerateTasks}
+            disabled={refreshingTasks}
+            style={styles.regenBtn}
+          >
+            {refreshingTasks
+              ? <ActivityIndicator size="small" color={theme.colors.onSurface} />
+              : <Feather name="refresh-cw" size={14} color={theme.colors.onSurface} />}
+          </Pressable>
+        </View>
         <View style={styles.actionsList}>
           {actions.map((a) => (
             <Pressable
@@ -241,6 +275,14 @@ const styles = StyleSheet.create({
   chatTitle: { fontFamily: theme.font.display, fontSize: 18, color: theme.colors.onSurface, fontWeight: "500" },
   chatSub: { fontFamily: theme.font.body, fontSize: 13, color: theme.colors.onSurfaceTertiary, marginTop: 2 },
   section: { marginBottom: theme.spacing.md, marginTop: theme.spacing.sm },
+  sectionRow: {
+    flexDirection: "row", alignItems: "flex-end", gap: theme.spacing.md,
+    marginBottom: theme.spacing.md, marginTop: theme.spacing.sm,
+  },
+  regenBtn: {
+    width: 40, height: 40, borderRadius: 20, backgroundColor: theme.colors.surfaceSecondary,
+    alignItems: "center", justifyContent: "center",
+  },
   sectionTitle: { fontFamily: theme.font.display, fontSize: 20, color: theme.colors.onSurface, fontWeight: "500" },
   sectionSubtitle: { fontFamily: theme.font.body, fontSize: 13, color: theme.colors.onSurfaceTertiary, marginTop: 2 },
   actionsList: { gap: theme.spacing.md, marginBottom: theme.spacing.xl },
