@@ -364,7 +364,7 @@ async def send_chat(payload: ChatMessageCreate, user=Depends(get_current_user)):
         # Include last 20 exchanges for context
         recent = prior[-40:]
         transcript = "\n".join(
-            f"{'User' if m['role'] == 'user' else 'Aura'}: {m['content']}" for m in recent
+            f"{'User' if m['role'] == 'user' else 'Lumi'}: {m['content']}" for m in recent
         )
         history_context = (
             "\n\nHere is the recent conversation so far (for context — do not repeat yourself):\n"
