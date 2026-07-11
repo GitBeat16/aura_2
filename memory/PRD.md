@@ -31,6 +31,33 @@ Full visual redesign inspired by **Apple Health**, **Headspace**, **Finch**, and
 - **Tab bar** now uses `BlurView` glass, custom active-tab pill background, and 4 tabs renamed to `Today · Lumi · Events · You` to match the new voice.
 - **Responsive**: tokens scale down at ≤360 via type styles; safe-area handled on all screens.
 
+## v5 – Spotify integration (delivered)
+Full modular music-provider architecture with Spotify as the first implementation.
+
+- **Modular provider abstraction** at `/app/backend/music/` — `MusicProvider` ABC (base.py) + `SpotifyProvider` (spotify.py). Adding Apple Music / YouTube Music later is a matter of implementing the same 11-method interface.
+- **OAuth 2.0 Authorization Code flow**:
+  - `GET /api/spotify/login` returns Spotify's authorize URL (state stored in Mongo).
+  - `GET /api/spotify/callback` exchanges the code, stores per-user access/refresh tokens + profile in `spotify_tokens`.
+  - Access token auto-refreshed on demand via `_spotify_token` helper.
+  - Scopes: `user-read-private`, `user-read-email`, `user-top-read`, `user-read-recently-played`, `playlist-read-private`, `playlist-read-collaborative`, `playlist-modify-private`, `playlist-modify-public`.
+- **Dev/manual mode**: `POST /api/spotify/connect-token` accepts a user access token directly (no client keys needed) — this is how we tested with the token you shared. Once `SPOTIFY_CLIENT_ID` / `SPOTIFY_CLIENT_SECRET` are set in `/app/backend/.env`, the OAuth button on the Music tab lights up.
+- **Endpoints (all under `/api`)**: `spotify/status`, `spotify/login`, `spotify/callback`, `spotify/connect-token`, `spotify/disconnect`, `spotify/playlists`, `spotify/top-tracks`, `spotify/top-artists`, `spotify/recently-played`, `spotify/playlists` (create), `spotify/playlists/{id}/tracks` (add), `music/recommendations`, `weather`.
+- **Weather (Open-Meteo, no key)**: `GET /api/weather?lat&lon` — condition, temperature, wind, is_day.
+- **AI-driven recommendation engine**: `POST /api/music/recommendations` combines
+  1. Latest mood (7-way palette → valence/energy targets)
+  2. Last 8 chat messages (activity heuristic + tone)
+  3. Weather (condition-appropriate genre biases)
+  4. Time of day + inferred activity (focusing / relaxing / winding-down / working-out / starting-day / flowing)
+  5. User's top artists and top tracks (personalized seeding)
+  Then asks Claude Sonnet 4.5 to return a **JSON prescription**: `title` (poetic playlist name), `reasoning` (one-sentence why), and 10 targeted Spotify **search queries** blending user's favorites with mood/genre hints. The backend fans out those searches, de-duplicates, and returns up to 15 tracks. (Spotify deprecated `/v1/recommendations` for new apps in Nov 2024, so this search-based approach is both compliant and more personalized.)
+- **Frontend**: new **Music tab** with three sub-tabs — For you · Playlists · Top & Recent. Connect screen supports the Spotify OAuth button (when configured) and a "paste an access token" fallback for dev/testing. For-you tab shows a hero card with playlist title, warm reasoning line, contextual chips (weather / time / activity), a **Save as playlist** button (creates a private Spotify playlist named "Lumi · <title>" and adds the tracks), and a scrollable list of tracks — tap any to open the Spotify app (deep-link via `spotify:track:xxx` with web fallback).
+- **Home** now shows a **"Music for how you feel"** card that jumps into the Music tab.
+
+## Constraints / Notes
+- Weather: currently seeded to San Francisco (37.77, -122.42). Once we ship user-location capture, `POST /music/recommendations` accepts `{lat, lon}`.
+- Spotify user access tokens are ~1 hour. With `SPOTIFY_CLIENT_ID` / `SECRET` in `.env`, refresh tokens keep the connection alive indefinitely. The dev "paste token" path won't auto-refresh.
+- Provider architecture is designed for expansion; second provider only needs a class implementing `MusicProvider`.
+
 ## Backend endpoints
 | Method | Path | Auth | Purpose |
 |---|---|---|---|

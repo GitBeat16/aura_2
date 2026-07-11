@@ -53,6 +53,14 @@ export default function TabsLayout() {
         }}
       />
       <Tabs.Screen
+        name="music"
+        options={{
+          title: "Music",
+          tabBarIcon: ({ color, focused }) => <TabIcon name="music" color={color} focused={focused} />,
+          tabBarButtonTestID: "tab-music",
+        }}
+      />
+      <Tabs.Screen
         name="events"
         options={{
           title: "Events",

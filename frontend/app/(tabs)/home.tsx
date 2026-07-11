@@ -153,6 +153,22 @@ export default function Home() {
           </Card>
         </Pressable>
 
+        {/* Music CTA */}
+        <Pressable testID="home-music-cta" onPress={() => router.push("/(tabs)/music")} style={styles.lumiCtaWrap}>
+          <Card style={styles.lumiCta}>
+            <View style={styles.lumiCtaRow}>
+              <View style={[styles.lumiCircle, { backgroundColor: "#1DB954" }]}>
+                <Feather name="music" size={18} color="#FFFFFF" />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.lumiCtaTitle}>Music for how you feel</Text>
+                <Text style={styles.lumiCtaSub}>Shaped by mood, weather, and time of day.</Text>
+              </View>
+              <Feather name="arrow-up-right" size={20} color={colors.ink} />
+            </View>
+          </Card>
+        </Pressable>
+
         {/* Daily actions */}
         <SectionHeader
           title="Small steps"

@@ -17,6 +17,10 @@ import jwt
 from emergentintegrations.llm.chat import LlmChat, UserMessage
 from emergentintegrations.llm.openai.text_to_speech import OpenAITextToSpeech
 from emergentintegrations.llm.openai.speech_to_text import OpenAISpeechToText
+import httpx
+import secrets as pysecrets
+
+from music import SpotifyProvider
 
 
 ROOT_DIR = Path(__file__).parent
@@ -31,6 +35,12 @@ JWT_SECRET = os.environ['JWT_SECRET']
 JWT_ALGORITHM = os.environ.get('JWT_ALGORITHM', 'HS256')
 JWT_EXPIRE_DAYS = int(os.environ.get('JWT_EXPIRE_DAYS', '30'))
 EMERGENT_LLM_KEY = os.environ['EMERGENT_LLM_KEY']
+SPOTIFY_CLIENT_ID = os.environ.get('SPOTIFY_CLIENT_ID', '')
+SPOTIFY_CLIENT_SECRET = os.environ.get('SPOTIFY_CLIENT_SECRET', '')
+SPOTIFY_REDIRECT_URI = os.environ.get('SPOTIFY_REDIRECT_URI', '')
+APP_DEEP_LINK = os.environ.get('APP_DEEP_LINK', 'frontend://spotify-connected')
+
+spotify = SpotifyProvider(SPOTIFY_CLIENT_ID, SPOTIFY_CLIENT_SECRET)
 
 app = FastAPI(title="Aura Companion API")
 api_router = APIRouter(prefix="/api")
@@ -938,6 +948,475 @@ async def voice_tts(payload: TTSRequest, user=Depends(get_current_user)):
     except Exception as e:
         logger.exception("TTS failed")
         raise HTTPException(status_code=500, detail=f"TTS failed: {str(e)[:160]}")
+
+
+# =========================== WEATHER (Open-Meteo, no key) ===========================
+WEATHER_CODES = {
+    0: "clear", 1: "mostly-clear", 2: "partly-cloudy", 3: "overcast",
+    45: "fog", 48: "fog",
+    51: "drizzle", 53: "drizzle", 55: "drizzle",
+    61: "rain", 63: "rain", 65: "heavy-rain",
+    71: "snow", 73: "snow", 75: "heavy-snow",
+    80: "showers", 81: "showers", 82: "heavy-showers",
+    95: "thunder", 96: "thunder", 99: "thunder",
+}
+
+
+@api_router.get("/weather")
+async def get_weather(lat: float = 37.7749, lon: float = -122.4194, user=Depends(get_current_user)):
+    """Fetch current weather from Open-Meteo (no key required)."""
+    try:
+        async with httpx.AsyncClient(timeout=10) as c:
+            r = await c.get(
+                "https://api.open-meteo.com/v1/forecast",
+                params={"latitude": lat, "longitude": lon, "current_weather": "true"},
+            )
+            r.raise_for_status()
+            data = r.json().get("current_weather") or {}
+        code = data.get("weathercode", 1)
+        return {
+            "temperature_c": data.get("temperature"),
+            "wind_kph": data.get("windspeed"),
+            "code": code,
+            "condition": WEATHER_CODES.get(int(code) if code is not None else 1, "clear"),
+            "is_day": bool(data.get("is_day", 1)),
+        }
+    except Exception as e:
+        logger.warning(f"weather failed: {e}")
+        return {"temperature_c": None, "wind_kph": None, "code": None, "condition": "clear", "is_day": True}
+
+
+# =========================== SPOTIFY ===========================
+class SpotifyStatus(BaseModel):
+    connected: bool
+    display_name: Optional[str] = None
+    product: Optional[str] = None
+    image: Optional[str] = None
+    provider_configured: bool
+
+
+async def _spotify_token(user_id: str) -> Optional[str]:
+    """Return a valid access token for this user, refreshing if expired."""
+    doc = await db.spotify_tokens.find_one({"user_id": user_id}, {"_id": 0})
+    if not doc:
+        return None
+    now = datetime.now(timezone.utc)
+    expires_at = doc.get("expires_at")
+    if expires_at is not None and expires_at.tzinfo is None:
+        expires_at = expires_at.replace(tzinfo=timezone.utc)
+    if expires_at and expires_at > now + timedelta(seconds=30):
+        return doc["access_token"]
+    # Refresh
+    rt = doc.get("refresh_token")
+    if not rt or not SPOTIFY_CLIENT_ID:
+        # If we can't refresh (manual-token mode) return whatever we have
+        return doc.get("access_token")
+    try:
+        tok = await spotify.refresh(rt)
+        access_token = tok["access_token"]
+        new_expires = now + timedelta(seconds=int(tok.get("expires_in", 3600)))
+        update = {"access_token": access_token, "expires_at": new_expires}
+        if tok.get("refresh_token"):
+            update["refresh_token"] = tok["refresh_token"]
+        await db.spotify_tokens.update_one({"user_id": user_id}, {"$set": update})
+        return access_token
+    except Exception as e:
+        logger.warning(f"spotify refresh failed: {e}")
+        return doc.get("access_token")
+
+
+async def _require_spotify(user: dict) -> str:
+    tok = await _spotify_token(user["id"])
+    if not tok:
+        raise HTTPException(status_code=400, detail="Spotify not connected")
+    return tok
+
+
+@api_router.get("/spotify/status", response_model=SpotifyStatus)
+async def spotify_status(user=Depends(get_current_user)):
+    configured = bool(SPOTIFY_CLIENT_ID and SPOTIFY_CLIENT_SECRET)
+    doc = await db.spotify_tokens.find_one({"user_id": user["id"]}, {"_id": 0})
+    if not doc:
+        return SpotifyStatus(connected=False, provider_configured=configured)
+    return SpotifyStatus(
+        connected=True,
+        display_name=doc.get("display_name"),
+        product=doc.get("product"),
+        image=doc.get("image"),
+        provider_configured=configured,
+    )
+
+
+@api_router.get("/spotify/login")
+async def spotify_login(user=Depends(get_current_user)):
+    if not (SPOTIFY_CLIENT_ID and SPOTIFY_CLIENT_SECRET):
+        raise HTTPException(status_code=400, detail="Spotify not configured. Add SPOTIFY_CLIENT_ID and SPOTIFY_CLIENT_SECRET.")
+    state = pysecrets.token_urlsafe(24)
+    await db.spotify_oauth_states.insert_one({
+        "state": state, "user_id": user["id"], "created_at": datetime.now(timezone.utc),
+    })
+    url = spotify.build_authorize_url(state=state, redirect_uri=SPOTIFY_REDIRECT_URI)
+    return {"authorize_url": url}
+
+
+@api_router.get("/spotify/callback")
+async def spotify_callback(code: Optional[str] = None, state: Optional[str] = None, error: Optional[str] = None):
+    """Spotify redirects here after user authorizes. We save tokens and bounce to the app deep-link."""
+    if error or not code or not state:
+        return {"ok": False, "error": error or "missing_code"}
+    row = await db.spotify_oauth_states.find_one({"state": state}, {"_id": 0})
+    if not row:
+        raise HTTPException(status_code=400, detail="Invalid or expired state")
+    try:
+        tok = await spotify.exchange_code(code, SPOTIFY_REDIRECT_URI)
+    except Exception as e:
+        logger.exception("spotify exchange failed")
+        raise HTTPException(status_code=500, detail=f"Token exchange failed: {e}")
+    access_token = tok["access_token"]
+    refresh_token = tok.get("refresh_token")
+    now = datetime.now(timezone.utc)
+    expires_at = now + timedelta(seconds=int(tok.get("expires_in", 3600)))
+    # profile
+    try:
+        me = await spotify.me(access_token)
+    except Exception:
+        me = {}
+    await db.spotify_tokens.update_one(
+        {"user_id": row["user_id"]},
+        {"$set": {
+            "user_id": row["user_id"],
+            "access_token": access_token,
+            "refresh_token": refresh_token,
+            "expires_at": expires_at,
+            "spotify_user_id": me.get("id"),
+            "display_name": me.get("display_name"),
+            "product": me.get("product"),
+            "image": me.get("image"),
+            "updated_at": now,
+        }},
+        upsert=True,
+    )
+    await db.spotify_oauth_states.delete_one({"state": state})
+    return {"ok": True, "deep_link": APP_DEEP_LINK}
+
+
+class ManualTokenPayload(BaseModel):
+    access_token: str
+    expires_in: Optional[int] = 3600
+    refresh_token: Optional[str] = None
+
+
+@api_router.post("/spotify/connect-token", response_model=SpotifyStatus)
+async def spotify_connect_token(payload: ManualTokenPayload, user=Depends(get_current_user)):
+    """Dev/manual mode: paste a Spotify user access token directly (useful before
+    you fill CLIENT_ID/SECRET). We fetch the profile to verify it works."""
+    try:
+        me = await spotify.me(payload.access_token)
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Invalid Spotify token: {e}")
+    now = datetime.now(timezone.utc)
+    expires_at = now + timedelta(seconds=int(payload.expires_in or 3600))
+    await db.spotify_tokens.update_one(
+        {"user_id": user["id"]},
+        {"$set": {
+            "user_id": user["id"],
+            "access_token": payload.access_token,
+            "refresh_token": payload.refresh_token,
+            "expires_at": expires_at,
+            "spotify_user_id": me.get("id"),
+            "display_name": me.get("display_name"),
+            "product": me.get("product"),
+            "image": me.get("image"),
+            "updated_at": now,
+        }},
+        upsert=True,
+    )
+    return SpotifyStatus(
+        connected=True,
+        display_name=me.get("display_name"), product=me.get("product"), image=me.get("image"),
+        provider_configured=bool(SPOTIFY_CLIENT_ID and SPOTIFY_CLIENT_SECRET),
+    )
+
+
+@api_router.post("/spotify/disconnect")
+async def spotify_disconnect(user=Depends(get_current_user)):
+    await db.spotify_tokens.delete_one({"user_id": user["id"]})
+    return {"ok": True}
+
+
+@api_router.get("/spotify/playlists")
+async def spotify_playlists(user=Depends(get_current_user)):
+    tok = await _require_spotify(user)
+    try:
+        return {"items": await spotify.playlists(tok, limit=25)}
+    except httpx.HTTPStatusError as e:
+        raise HTTPException(status_code=e.response.status_code, detail=e.response.text[:200])
+
+
+@api_router.get("/spotify/top-tracks")
+async def spotify_top_tracks(time_range: str = "medium_term", user=Depends(get_current_user)):
+    tok = await _require_spotify(user)
+    try:
+        return {"items": await spotify.top_tracks(tok, limit=10, time_range=time_range)}
+    except httpx.HTTPStatusError as e:
+        raise HTTPException(status_code=e.response.status_code, detail=e.response.text[:200])
+
+
+@api_router.get("/spotify/top-artists")
+async def spotify_top_artists(time_range: str = "medium_term", user=Depends(get_current_user)):
+    tok = await _require_spotify(user)
+    try:
+        return {"items": await spotify.top_artists(tok, limit=10, time_range=time_range)}
+    except httpx.HTTPStatusError as e:
+        raise HTTPException(status_code=e.response.status_code, detail=e.response.text[:200])
+
+
+@api_router.get("/spotify/recently-played")
+async def spotify_recently_played(user=Depends(get_current_user)):
+    tok = await _require_spotify(user)
+    try:
+        return {"items": await spotify.recently_played(tok, limit=20)}
+    except httpx.HTTPStatusError as e:
+        raise HTTPException(status_code=e.response.status_code, detail=e.response.text[:200])
+
+
+# ---- AI-driven recommendation engine ----
+MOOD_TO_AUDIO_TARGETS: dict[str, dict] = {
+    "great":   {"valence": 0.85, "energy": 0.75},
+    "good":    {"valence": 0.75, "energy": 0.55},
+    "okay":    {"valence": 0.55, "energy": 0.45},
+    "low":     {"valence": 0.30, "energy": 0.30, "acousticness": 0.5},
+    "stuck":   {"valence": 0.45, "energy": 0.35, "instrumentalness": 0.4},
+    "anxious": {"valence": 0.40, "energy": 0.25, "acousticness": 0.7},
+    "lonely":  {"valence": 0.35, "energy": 0.30, "acousticness": 0.6},
+}
+MOOD_TO_GENRES: dict[str, list[str]] = {
+    "great":   ["pop", "happy", "summer"],
+    "good":    ["indie", "pop", "acoustic"],
+    "okay":    ["chill", "acoustic", "folk"],
+    "low":     ["sad", "acoustic", "piano"],
+    "stuck":   ["ambient", "lo-fi", "study"],
+    "anxious": ["ambient", "chill", "piano"],
+    "lonely":  ["indie", "folk", "sad"],
+}
+WEATHER_TO_GENRES: dict[str, list[str]] = {
+    "rain": ["rainy-day", "lo-fi", "jazz"],
+    "heavy-rain": ["rainy-day", "ambient", "piano"],
+    "showers": ["rainy-day", "chill"],
+    "thunder": ["ambient", "electronic"],
+    "clear": ["indie", "pop", "summer"],
+    "mostly-clear": ["indie", "pop"],
+    "sunset": ["chill", "sunset"],
+    "overcast": ["indie", "lo-fi"],
+    "fog": ["ambient", "chill"],
+    "snow": ["classical", "piano"],
+}
+
+
+def _time_of_day(hour: int) -> str:
+    if hour < 5: return "late-night"
+    if hour < 11: return "morning"
+    if hour < 17: return "afternoon"
+    if hour < 21: return "evening"
+    return "night"
+
+
+def _activity_from_signals(hour: int, mood: str, chat_snippet: str) -> str:
+    t = chat_snippet.lower()
+    if any(k in t for k in ("workout", "run", "gym", "exercise")):
+        return "working-out"
+    if any(k in t for k in ("sleep", "bed", "tired", "wind down")):
+        return "winding-down"
+    if any(k in t for k in ("work", "study", "focus", "deadline", "meeting")):
+        return "focusing"
+    if mood in ("anxious", "stuck", "low", "lonely") or hour >= 21 or hour < 6:
+        return "relaxing"
+    if hour < 11:
+        return "starting-day"
+    return "flowing"
+
+
+class MusicRecoRequest(BaseModel):
+    lat: Optional[float] = 37.7749
+    lon: Optional[float] = -122.4194
+
+
+@api_router.post("/music/recommendations")
+async def music_recommendations(payload: MusicRecoRequest, user=Depends(get_current_user)):
+    """AI-curated recommendations based on mood + weather + time of day + recent chat tone."""
+    tok = await _require_spotify(user)
+    now = datetime.now(timezone.utc)
+
+    # 1) Mood
+    latest_mood_doc = await db.moods.find_one(
+        {"user_id": user["id"]}, {"_id": 0}, sort=[("created_at", -1)]
+    )
+    mood = (latest_mood_doc or {}).get("mood", "okay")
+
+    # 2) Chat context (last 8 messages)
+    msgs = await db.chat_messages.find(
+        {"user_id": user["id"]}, {"_id": 0}
+    ).sort("created_at", -1).to_list(8)
+    msgs.reverse()
+    chat_snippet = " ".join(m["content"] for m in msgs if m["role"] == "user")[-500:]
+
+    # 3) Weather (best-effort)
+    weather = {"condition": "clear", "is_day": True, "temperature_c": None}
+    try:
+        async with httpx.AsyncClient(timeout=6) as c:
+            r = await c.get(
+                "https://api.open-meteo.com/v1/forecast",
+                params={"latitude": payload.lat, "longitude": payload.lon, "current_weather": "true"},
+            )
+            data = r.json().get("current_weather") or {}
+            code = data.get("weathercode", 1)
+            weather = {
+                "condition": WEATHER_CODES.get(int(code) if code is not None else 1, "clear"),
+                "is_day": bool(data.get("is_day", 1)),
+                "temperature_c": data.get("temperature"),
+            }
+    except Exception:
+        pass
+
+    # 4) Time of day & activity
+    hour = now.hour
+    tod = _time_of_day(hour)
+    activity = _activity_from_signals(hour, mood, chat_snippet)
+
+    # 5) Seed selection: prefer user top artists / tracks
+    top_tracks_list: list[dict] = []
+    top_artists_list: list[dict] = []
+    try:
+        top_tracks_list = await spotify.top_tracks(tok, limit=5, time_range="short_term")
+    except Exception: pass
+    try:
+        top_artists_list = await spotify.top_artists(tok, limit=5, time_range="short_term")
+    except Exception: pass
+
+    # 6) Ask Claude to synthesize the vibe -> Spotify search queries + reasoning
+    #    Spotify deprecated /v1/recommendations for new apps in Nov 2024, so we
+    #    craft targeted search queries that leverage user's top artists and
+    #    match mood / weather / activity, then merge results.
+    genre_hints = ", ".join(
+        MOOD_TO_GENRES.get(mood, []) + WEATHER_TO_GENRES.get(weather["condition"], [])
+    )
+    artist_hints = ", ".join(a["name"] for a in top_artists_list[:5] if a.get("name"))
+    track_hints = ", ".join(f"{t['name']} — {', '.join(a['name'] for a in t['artists'])}" for t in top_tracks_list[:4] if t.get("name"))
+
+    reasoning = ""
+    playlist_title = f"For a {mood} {tod}"
+    queries: list[str] = []
+    try:
+        chat = LlmChat(
+            api_key=EMERGENT_LLM_KEY,
+            session_id=f"reco-{user['id']}-{now.strftime('%Y%m%d%H')}",
+            system_message=(
+                "You are Lumi, a music-savvy AI companion. Given the user's mood, weather, time of day, activity, "
+                "recent conversation, and their favorite artists/tracks, craft a warm music prescription.\n\n"
+                "Return ONLY a JSON object with these keys (no prose, no code fences):\n"
+                '  "title": short poetic playlist title (max 32 chars)\n'
+                '  "reasoning": one warm sentence (max 160 chars) explaining why this fits right now\n'
+                '  "queries": an array of 10 Spotify search queries. Mix:\n'
+                "    - 3-4 queries that reference the USER'S OWN favorite artists (e.g., 'artist:\"Bon Iver\"')\n"
+                "    - 3-4 vibe queries (e.g., 'lo-fi rainy afternoon', 'gentle acoustic indie')\n"
+                "    - 2-3 discovery queries with genre and mood keywords\n"
+                "    Keep queries under 60 characters each. No hashtags. No emojis.\n"
+            ),
+        ).with_model("anthropic", "claude-sonnet-4-6")
+        raw = (await chat.send_message(UserMessage(text=(
+            f"Mood: {mood}\nActivity: {activity}\nTime: {tod}\nWeather: {weather['condition']} "
+            f"({'day' if weather['is_day'] else 'night'})\n"
+            f"Genre hints: {genre_hints}\n"
+            f"Favorite artists: {artist_hints or '(none)'}\n"
+            f"Recently loved tracks: {track_hints or '(none)'}\n"
+            f"Recent user words: {chat_snippet[:220] or '(none)'}"
+        )))).strip()
+        # extract JSON
+        import json as _json
+        import re as _re
+        m = _re.search(r"\{.*\}", raw, _re.DOTALL)
+        if m:
+            parsed = _json.loads(m.group(0))
+            if isinstance(parsed.get("title"), str):
+                playlist_title = parsed["title"][:40]
+            if isinstance(parsed.get("reasoning"), str):
+                reasoning = parsed["reasoning"][:220]
+            if isinstance(parsed.get("queries"), list):
+                queries = [str(q)[:80] for q in parsed["queries"] if isinstance(q, str) and q.strip()][:12]
+    except Exception as e:
+        logger.warning(f"reco AI failed: {e}")
+
+    # Fallback queries
+    if not queries:
+        genres = MOOD_TO_GENRES.get(mood, ["chill"])[:2] + WEATHER_TO_GENRES.get(weather["condition"], [])[:1]
+        queries = [f"{g} {activity.replace('-', ' ')}" for g in genres] + \
+                  [f"{mood} {tod}"] + \
+                  [f"artist:\"{a['name']}\"" for a in top_artists_list[:3] if a.get("name")]
+    if not reasoning:
+        reasoning = f"A quiet {tod} soundtrack shaped for feeling {mood}."
+
+    # 7) Fan out searches, dedupe by track id
+    seen: set = set()
+    tracks: list[dict] = []
+    for q in queries:
+        try:
+            results = await spotify.search_tracks(tok, q, limit=3)
+        except Exception as e:
+            logger.warning(f"search failed for '{q}': {e}")
+            continue
+        for t in results:
+            tid = t.get("id")
+            if not tid or tid in seen:
+                continue
+            seen.add(tid)
+            tracks.append(t)
+            if len(tracks) >= 18:
+                break
+        if len(tracks) >= 18:
+            break
+
+    return {
+        "context": {
+            "mood": mood, "activity": activity, "time_of_day": tod,
+            "weather": weather, "hour": hour,
+        },
+        "playlist_title": playlist_title,
+        "reasoning": reasoning,
+        "queries": queries,
+        "tracks": tracks[:15],
+    }
+
+
+class CreatePlaylistPayload(BaseModel):
+    name: str
+    description: Optional[str] = "Curated by Lumi"
+    track_uris: list[str]
+
+
+@api_router.post("/spotify/playlists")
+async def spotify_create_playlist(payload: CreatePlaylistPayload, user=Depends(get_current_user)):
+    tok = await _require_spotify(user)
+    try:
+        me = await spotify.me(tok)
+        pl = await spotify.create_playlist(tok, me["id"], payload.name, payload.description or "")
+        if payload.track_uris:
+            await spotify.add_tracks(tok, pl["id"], payload.track_uris[:100])
+        return pl
+    except httpx.HTTPStatusError as e:
+        raise HTTPException(status_code=e.response.status_code, detail=e.response.text[:200])
+
+
+class AddTracksPayload(BaseModel):
+    track_uris: list[str]
+
+
+@api_router.post("/spotify/playlists/{playlist_id}/tracks")
+async def spotify_add_tracks(playlist_id: str, payload: AddTracksPayload, user=Depends(get_current_user)):
+    tok = await _require_spotify(user)
+    try:
+        return await spotify.add_tracks(tok, playlist_id, payload.track_uris[:100])
+    except httpx.HTTPStatusError as e:
+        raise HTTPException(status_code=e.response.status_code, detail=e.response.text[:200])
 
 
 # =========================== HEALTH ===========================

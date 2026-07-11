@@ -65,6 +65,26 @@ export type EventItem = { id: string; title: string; description: string; catego
 export type TaskStreak = { title: string; icon: string; current_streak: number; total_completions: number; last_completed: string | null; is_active: boolean };
 export type WeeklyRecap = { week_start: string; week_end: string; tasks_completed: number; days_active: number; moods_logged: number; top_mood: string | null; longest_daily_streak: number; reflection: string; share_text: string };
 
+export type SpotifyStatus = { connected: boolean; display_name?: string | null; product?: string | null; image?: string | null; provider_configured: boolean };
+export type SpotifyTrack = {
+  id: string; uri: string; name: string;
+  artists: { id: string; name: string }[];
+  album: { name: string; image: string | null };
+  duration_ms: number; preview_url: string | null; external_url: string | null;
+  played_at?: string;
+};
+export type SpotifyPlaylist = {
+  id: string; uri: string; name: string; description: string | null;
+  image: string | null; track_count: number; owner: string | null; external_url: string | null;
+};
+export type MusicReco = {
+  context: { mood: string; activity: string; time_of_day: string; weather: { condition: string; is_day: boolean; temperature_c: number | null }; hour: number };
+  playlist_title: string;
+  reasoning: string;
+  queries: string[];
+  tracks: SpotifyTrack[];
+};
+
 // ==== API ====
 export const api = {
   register: async (email: string, password: string, name: string) => {
@@ -117,6 +137,27 @@ export const api = {
 
   taskStreaks: () => request<TaskStreak[]>("/stats/task-streaks"),
   weeklyRecap: () => request<WeeklyRecap>("/stats/weekly-recap"),
+
+  // Spotify
+  spotifyStatus: () => request<SpotifyStatus>("/spotify/status"),
+  spotifyLoginUrl: () => request<{ authorize_url: string }>("/spotify/login"),
+  spotifyConnectToken: (access_token: string, expires_in?: number, refresh_token?: string) =>
+    request<SpotifyStatus>("/spotify/connect-token", {
+      method: "POST", body: { access_token, expires_in, refresh_token },
+    }),
+  spotifyDisconnect: () => request<{ ok: boolean }>("/spotify/disconnect", { method: "POST" }),
+  spotifyPlaylists: () => request<{ items: SpotifyPlaylist[] }>("/spotify/playlists"),
+  spotifyTopTracks: (time_range: string = "medium_term") =>
+    request<{ items: SpotifyTrack[] }>(`/spotify/top-tracks?time_range=${time_range}`),
+  spotifyTopArtists: (time_range: string = "medium_term") =>
+    request<{ items: any[] }>(`/spotify/top-artists?time_range=${time_range}`),
+  spotifyRecentlyPlayed: () => request<{ items: SpotifyTrack[] }>("/spotify/recently-played"),
+  musicRecommendations: (lat?: number, lon?: number) =>
+    request<MusicReco>("/music/recommendations", { method: "POST", body: { lat, lon } }),
+  spotifyCreatePlaylist: (name: string, description: string, track_uris: string[]) =>
+    request<SpotifyPlaylist>("/spotify/playlists", {
+      method: "POST", body: { name, description, track_uris },
+    }),
 
   transcribeAudio: async (uri: string, mime: string = "audio/m4a", filename: string = "audio.m4a") => {
     const token = await getToken();
