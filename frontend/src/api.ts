@@ -62,6 +62,8 @@ export type ChatMsg = { id: string; session_id: string; role: "user" | "assistan
 export type DailyAction = { id: string; title: string; description: string; category: string; duration_minutes: number; icon: string; completed: boolean };
 export type SocialSuggestion = { id: string; title: string; description: string; prompt: string; icon: string };
 export type EventItem = { id: string; title: string; description: string; category: string; date: string; time: string; location: string; image_url: string; attendees: number; is_virtual: boolean };
+export type TaskStreak = { title: string; icon: string; current_streak: number; total_completions: number; last_completed: string | null; is_active: boolean };
+export type WeeklyRecap = { week_start: string; week_end: string; tasks_completed: number; days_active: number; moods_logged: number; top_mood: string | null; longest_daily_streak: number; reflection: string; share_text: string };
 
 // ==== API ====
 export const api = {
@@ -112,6 +114,9 @@ export const api = {
     return request<EventItem[]>(`/events${q}`);
   },
   eventCategories: () => request<{ categories: string[] }>("/events/categories"),
+
+  taskStreaks: () => request<TaskStreak[]>("/stats/task-streaks"),
+  weeklyRecap: () => request<WeeklyRecap>("/stats/weekly-recap"),
 
   transcribeAudio: async (uri: string, mime: string = "audio/m4a", filename: string = "audio.m4a") => {
     const token = await getToken();

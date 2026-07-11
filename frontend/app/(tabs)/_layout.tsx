@@ -1,32 +1,46 @@
 import { Tabs } from "expo-router";
 import { Feather } from "@expo/vector-icons";
-import { theme } from "@/src/theme";
-import { Platform, View, StyleSheet } from "react-native";
+import { Platform, View, StyleSheet, Text } from "react-native";
+import { BlurView } from "expo-blur";
+import { colors, spacing, type } from "@/src/theme";
 
 export default function TabsLayout() {
   return (
     <Tabs
       screenOptions={{
         headerShown: false,
-        tabBarActiveTintColor: theme.colors.onSurface,
-        tabBarInactiveTintColor: theme.colors.onSurfaceTertiary,
+        tabBarActiveTintColor: colors.ink,
+        tabBarInactiveTintColor: colors.inkFaint,
         tabBarShowLabel: true,
-        tabBarLabelStyle: { fontFamily: theme.font.body, fontSize: 11, fontWeight: "600", marginBottom: 4 },
+        tabBarLabelStyle: { ...type.overline, fontSize: 10, letterSpacing: 0.6, marginBottom: 4 },
+        tabBarBackground: () => (
+          <View style={StyleSheet.absoluteFill}>
+            <BlurView
+              intensity={Platform.OS === "web" ? 60 : 45}
+              tint="light"
+              style={StyleSheet.absoluteFill}
+            />
+            <View style={[StyleSheet.absoluteFill, { backgroundColor: colors.glass }]} />
+            <View style={styles.hairline} />
+          </View>
+        ),
         tabBarStyle: {
-          backgroundColor: theme.colors.surface,
-          borderTopColor: theme.colors.border,
-          borderTopWidth: 1,
-          height: Platform.OS === "ios" ? 84 : 64,
-          paddingTop: 8,
+          position: "absolute",
+          left: 0, right: 0, bottom: 0,
+          backgroundColor: "transparent",
+          borderTopWidth: 0,
+          height: Platform.OS === "ios" ? 84 : 68,
+          paddingTop: 10,
+          elevation: 0,
         },
-        sceneStyle: { backgroundColor: theme.colors.surface },
+        sceneStyle: { backgroundColor: colors.bg },
       }}
     >
       <Tabs.Screen
         name="home"
         options={{
-          title: "Home",
-          tabBarIcon: ({ color, focused }) => <TabIcon name="home" color={color} focused={focused} />,
+          title: "Today",
+          tabBarIcon: ({ color, focused }) => <TabIcon name="sun" color={color} focused={focused} />,
           tabBarButtonTestID: "tab-home",
         }}
       />
@@ -61,14 +75,13 @@ export default function TabsLayout() {
 function TabIcon({ name, color, focused }: { name: any; color: string; focused: boolean }) {
   return (
     <View style={[styles.iconWrap, focused && styles.iconWrapActive]}>
-      <Feather name={name} size={20} color={color} />
+      <Feather name={name} size={19} color={color} />
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  iconWrap: {
-    paddingHorizontal: 14, paddingVertical: 6, borderRadius: theme.radius.pill,
-  },
-  iconWrapActive: { backgroundColor: theme.colors.surfaceSecondary },
+  iconWrap: { paddingHorizontal: 14, paddingVertical: 6, borderRadius: 999 },
+  iconWrapActive: { backgroundColor: colors.lumiSoft },
+  hairline: { position: "absolute", top: 0, left: 0, right: 0, height: 1, backgroundColor: colors.border, opacity: 0.6 },
 });

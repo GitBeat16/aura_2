@@ -1,16 +1,28 @@
 import { useCallback, useEffect, useState } from "react";
 import {
-  View, Text, StyleSheet, ScrollView, Pressable, ActivityIndicator, RefreshControl,
+  View, Text, StyleSheet, ScrollView, Pressable, ActivityIndicator, RefreshControl, Platform,
 } from "react-native";
 import { useRouter, useFocusEffect } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Feather } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
-import { LinearGradient } from "expo-linear-gradient";
-import { theme, MOODS } from "@/src/theme";
+import { colors, spacing, type, radius, MOODS } from "@/src/theme";
 import { api, DailyAction, Mood, SocialSuggestion } from "@/src/api";
 import { useAuth } from "@/src/auth";
 import { playSfx } from "@/src/utils/sounds";
+import {
+  Card, SectionHeader, IconButton, PillTag, EmptyState,
+} from "@/src/ui";
+
+const CATEGORY_ACCENT: Record<string, string> = {
+  connection: colors.catConnection,
+  reflection: colors.catReflection,
+  movement: colors.catMovement,
+  care: colors.catCare,
+  calm: colors.catCalm,
+  reset: colors.catReset,
+  growth: colors.catGrowth,
+};
 
 export default function Home() {
   const router = useRouter();
@@ -20,7 +32,6 @@ export default function Home() {
   const [social, setSocial] = useState<SocialSuggestion[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-
   const [refreshingTasks, setRefreshingTasks] = useState(false);
 
   const load = useCallback(async () => {
@@ -30,12 +41,8 @@ export default function Home() {
         api.dailyActions(),
         api.socialSuggestions(),
       ]);
-      setMood(m);
-      setActions(a);
-      setSocial(s);
-    } catch (e) {
-      // fail silent
-    }
+      setMood(m); setActions(a); setSocial(s);
+    } catch { /* silent */ }
   }, []);
 
   const regenerateTasks = useCallback(async () => {
@@ -45,22 +52,13 @@ export default function Home() {
       const fresh = await api.regenerateActions();
       setActions(fresh);
       playSfx("chime", 0.5);
-    } catch {} finally {
-      setRefreshingTasks(false);
-    }
+    } catch {} finally { setRefreshingTasks(false); }
   }, []);
 
-  useEffect(() => {
-    (async () => { setLoading(true); await load(); setLoading(false); })();
-  }, [load]);
-
+  useEffect(() => { (async () => { setLoading(true); await load(); setLoading(false); })(); }, [load]);
   useFocusEffect(useCallback(() => { load(); }, [load]));
 
-  const onRefresh = async () => {
-    setRefreshing(true);
-    await load();
-    setRefreshing(false);
-  };
+  const onRefresh = async () => { setRefreshing(true); await load(); setRefreshing(false); };
 
   const toggleAction = async (a: DailyAction) => {
     if (a.completed) return;
@@ -73,11 +71,12 @@ export default function Home() {
   const moodMeta = MOODS.find((m) => m.key === mood?.mood);
   const greeting = getGreeting();
   const firstName = (user?.name || "friend").split(" ")[0];
+  const doneCount = actions.filter((a) => a.completed).length;
 
   if (loading) {
     return (
-      <View style={[styles.center, { backgroundColor: theme.colors.surface }]}>
-        <ActivityIndicator color={theme.colors.brandPrimary} />
+      <View style={styles.centerAll}>
+        <ActivityIndicator color={colors.lumi} />
       </View>
     );
   }
@@ -87,235 +86,222 @@ export default function Home() {
       <ScrollView
         contentContainerStyle={styles.scroll}
         showsVerticalScrollIndicator={false}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={theme.colors.brandPrimary} />}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.lumi} />}
       >
-        {/* Header */}
-        <View style={styles.header}>
+        {/* Greeting */}
+        <View style={styles.headerRow}>
           <View style={{ flex: 1 }}>
-            <Text style={styles.hello}>{greeting}</Text>
+            <Text style={styles.eyebrow}>{greeting}</Text>
             <Text style={styles.name}>{firstName}.</Text>
           </View>
-          <Pressable
+          <IconButton
             testID="home-checkin-button"
+            icon="edit-2"
             onPress={() => router.push("/mood-checkin")}
-            style={styles.checkinBtn}
-          >
-            <Feather name="edit-2" size={14} color={theme.colors.onSurface} />
-            <Text style={styles.checkinText}>Check-in</Text>
-          </Pressable>
+            size={44}
+            tint={colors.card}
+          />
         </View>
 
-        {/* Mood recap */}
+        {/* Mood recap or invite */}
         {mood && moodMeta ? (
-          <View testID="home-mood-recap" style={[styles.moodRecap, { backgroundColor: moodMeta.color }]}>
-            <Text style={styles.moodEmoji}>{moodMeta.emoji}</Text>
-            <View style={{ flex: 1 }}>
-              <Text style={[styles.moodLabel, { color: moodMeta.onColor }]}>You're feeling {moodMeta.label.toLowerCase()}</Text>
-              <Text style={[styles.moodHint, { color: moodMeta.onColor, opacity: 0.75 }]}>
-                Here's a gentle path for right now.
-              </Text>
+          <Card
+            testID="home-mood-recap"
+            tone="default"
+            style={[styles.moodCard, { backgroundColor: moodMeta.color, ...noShadow }]}
+            padding={spacing.xl}
+          >
+            <View style={styles.moodTop}>
+              <PillTag label="Today's check-in" tint="rgba(255,255,255,0.5)" textColor={moodMeta.onColor} />
+              <Text style={[styles.moodEmoji]}>{moodMeta.emoji}</Text>
             </View>
-          </View>
+            <Text style={[styles.moodTitle, { color: moodMeta.onColor }]}>You're feeling {moodMeta.label.toLowerCase()}.</Text>
+            <Text style={[styles.moodHint, { color: moodMeta.onColor, opacity: 0.75 }]}>
+              Here's a gentle path shaped for right now.
+            </Text>
+          </Card>
         ) : (
           <Pressable
             testID="home-no-mood-cta"
             onPress={() => router.push("/mood-checkin")}
-            style={styles.noMoodCard}
           >
-            <Text style={styles.noMoodTitle}>How are you today?</Text>
-            <Text style={styles.noMoodSub}>Tap to check-in — takes 15 seconds.</Text>
+            <Card style={styles.noMoodCard} tone="tinted">
+              <View style={styles.noMoodRow}>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.noMoodTitle}>How are you today?</Text>
+                  <Text style={styles.noMoodSub}>Tap to check-in — takes 15 seconds.</Text>
+                </View>
+                <Feather name="arrow-right" size={20} color={colors.lumiInk} />
+              </View>
+            </Card>
           </Pressable>
         )}
 
-        {/* Chat CTA */}
-        <Pressable
-          testID="home-chat-cta"
-          onPress={() => router.push("/(tabs)/chat")}
-          style={styles.chatCta}
-        >
-          <LinearGradient
-            colors={[theme.colors.surface, theme.colors.brandTertiary + "40"]}
-            style={StyleSheet.absoluteFill}
-          />
-          <View style={styles.chatCtaInner}>
-            <View style={styles.chatIcon}>
-              <Feather name="message-circle" size={20} color={theme.colors.onBrandPrimary} />
+        {/* Talk to Lumi CTA */}
+        <Pressable testID="home-chat-cta" onPress={() => router.push("/(tabs)/chat")} style={styles.lumiCtaWrap}>
+          <Card style={styles.lumiCta} tone="tinted">
+            <View style={styles.lumiCtaRow}>
+              <View style={styles.lumiCircle}>
+                <View style={styles.lumiCircleInner} />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.lumiCtaTitle}>Talk to Lumi</Text>
+                <Text style={styles.lumiCtaSub}>I'm here to listen, whenever you need me.</Text>
+              </View>
+              <Feather name="arrow-up-right" size={20} color={colors.lumiInk} />
             </View>
-            <View style={{ flex: 1 }}>
-              <Text style={styles.chatTitle}>Talk to Lumi</Text>
-              <Text style={styles.chatSub}>I'm here to listen, whenever you need me.</Text>
-            </View>
-            <Feather name="arrow-right" size={20} color={theme.colors.onSurfaceTertiary} />
-          </View>
+          </Card>
         </Pressable>
 
         {/* Daily actions */}
-        <View style={styles.sectionRow}>
-          <View style={{ flex: 1 }}>
-            <Text style={styles.sectionTitle}>Small steps for today</Text>
-            <Text style={styles.sectionSubtitle}>
-              {actions.length > 0 ? `${actions.length} gentle nudges` : "One at a time. No pressure."}
-              {mood ? ` · shaped by your ${MOODS.find((x) => x.key === mood.mood)?.label.toLowerCase()} check-in` : ""}
-            </Text>
-          </View>
-          <Pressable
-            testID="home-regen-tasks-button"
-            onPress={regenerateTasks}
-            disabled={refreshingTasks}
-            style={styles.regenBtn}
-          >
-            {refreshingTasks
-              ? <ActivityIndicator size="small" color={theme.colors.onSurface} />
-              : <Feather name="refresh-cw" size={14} color={theme.colors.onSurface} />}
-          </Pressable>
-        </View>
+        <SectionHeader
+          title="Small steps"
+          caption={
+            actions.length > 0
+              ? `${doneCount}/${actions.length} completed${mood ? ` · shaped by your ${moodMeta?.label.toLowerCase()} check-in` : ""}`
+              : "One at a time. No pressure."
+          }
+          right={
+            <IconButton
+              testID="home-regen-tasks-button"
+              icon={refreshingTasks ? "loader" : "refresh-cw"}
+              size={38}
+              tint={colors.bgAlt}
+              onPress={regenerateTasks}
+              disabled={refreshingTasks}
+            />
+          }
+        />
         <View style={styles.actionsList}>
-          {actions.map((a) => (
-            <Pressable
-              key={a.id}
-              testID={`action-card-${a.id}`}
-              onPress={() => toggleAction(a)}
-              style={[styles.actionCard, a.completed && styles.actionCardDone]}
-            >
-              <View style={[styles.actionIcon, a.completed && { backgroundColor: theme.colors.success }]}>
-                <Feather name={a.completed ? "check" : (a.icon as any)} size={16} color={a.completed ? theme.colors.onSuccess : theme.colors.onSurface} />
-              </View>
-              <View style={{ flex: 1 }}>
-                <Text style={[styles.actionTitle, a.completed && styles.actionTitleDone]}>{a.title}</Text>
-                <Text style={styles.actionDesc}>{a.description}</Text>
-              </View>
-              <View style={styles.durationPill}>
-                <Text style={styles.durationText}>{a.duration_minutes}m</Text>
-              </View>
-            </Pressable>
-          ))}
+          {actions.map((a) => {
+            const accent = CATEGORY_ACCENT[a.category] || colors.lumiSoft;
+            return (
+              <Pressable
+                key={a.id}
+                testID={`action-card-${a.id}`}
+                onPress={() => toggleAction(a)}
+              >
+                <Card style={styles.actionCard} padding={spacing.lg}>
+                  <View style={styles.actionInner}>
+                    <View style={[styles.actionIcon, { backgroundColor: a.completed ? colors.success : accent }]}>
+                      <Feather
+                        name={a.completed ? "check" : (a.icon as any)}
+                        size={16}
+                        color={a.completed ? "#FFFFFF" : colors.ink}
+                      />
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <Text style={[styles.actionTitle, a.completed && styles.actionTitleDone]}>{a.title}</Text>
+                      <Text style={styles.actionDesc}>{a.description}</Text>
+                    </View>
+                    <View style={styles.durationPill}>
+                      <Text style={styles.durationText}>{a.duration_minutes}m</Text>
+                    </View>
+                  </View>
+                </Card>
+              </Pressable>
+            );
+          })}
+          {actions.length === 0 && <EmptyState title="No tasks yet" subtitle="Check in with a mood to get personalized steps." icon="feather" />}
         </View>
 
         {/* Social suggestions */}
-        <Section title="A little reach-out" subtitle="Connection is a small thing that helps." />
+        <SectionHeader title="A little reach-out" caption="Connection is a small thing that helps." />
         <View style={styles.socialList}>
           {social.map((s) => (
-            <View key={s.id} testID={`social-card-${s.id}`} style={styles.socialCard}>
-              <View style={styles.socialIcon}>
-                <Feather name={s.icon as any} size={16} color={theme.colors.onSurface} />
-              </View>
-              <View style={{ flex: 1 }}>
-                <Text style={styles.socialTitle}>{s.title}</Text>
-                <Text style={styles.socialDesc}>{s.description}</Text>
-                <View style={styles.promptBubble}>
-                  <Text style={styles.promptText}>"{s.prompt}"</Text>
+            <Card key={s.id} testID={`social-card-${s.id}`} style={styles.socialCard}>
+              <View style={styles.socialTop}>
+                <View style={styles.socialIcon}>
+                  <Feather name={s.icon as any} size={16} color={colors.ink} />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.socialTitle}>{s.title}</Text>
+                  <Text style={styles.socialDesc}>{s.description}</Text>
                 </View>
               </View>
-            </View>
+              <View style={styles.promptBubble}>
+                <Text style={styles.promptText}>"{s.prompt}"</Text>
+              </View>
+            </Card>
           ))}
         </View>
 
-        <View style={{ height: theme.spacing.xxl }} />
+        <View style={{ height: 120 }} />
       </ScrollView>
     </SafeAreaView>
   );
 }
 
-function Section({ title, subtitle }: { title: string; subtitle?: string }) {
-  return (
-    <View style={styles.section}>
-      <Text style={styles.sectionTitle}>{title}</Text>
-      {subtitle && <Text style={styles.sectionSubtitle}>{subtitle}</Text>}
-    </View>
-  );
-}
-
 function getGreeting() {
   const h = new Date().getHours();
-  if (h < 5) return "Late night,";
-  if (h < 12) return "Good morning,";
-  if (h < 17) return "Good afternoon,";
-  if (h < 21) return "Good evening,";
-  return "Rest easy,";
+  if (h < 5) return "Late night";
+  if (h < 12) return "Good morning";
+  if (h < 17) return "Good afternoon";
+  if (h < 21) return "Good evening";
+  return "Rest easy";
 }
 
+const noShadow = { shadowOpacity: 0, elevation: 0 };
+
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: theme.colors.surface },
-  center: { flex: 1, alignItems: "center", justifyContent: "center" },
-  scroll: { paddingHorizontal: theme.spacing.xl, paddingTop: theme.spacing.md, paddingBottom: theme.spacing.xl },
-  header: { flexDirection: "row", alignItems: "flex-end", justifyContent: "space-between", marginBottom: theme.spacing.xl },
-  hello: { fontFamily: theme.font.body, fontSize: 14, color: theme.colors.onSurfaceTertiary },
-  name: { fontFamily: theme.font.display, fontSize: 30, color: theme.colors.onSurface, fontWeight: "500", marginTop: 2 },
-  checkinBtn: {
-    flexDirection: "row", alignItems: "center", gap: 6,
-    backgroundColor: theme.colors.surfaceSecondary, paddingHorizontal: 14, paddingVertical: 10, borderRadius: theme.radius.pill,
+  safe: { flex: 1, backgroundColor: colors.bg },
+  centerAll: { flex: 1, alignItems: "center", justifyContent: "center", backgroundColor: colors.bg },
+  scroll: { paddingHorizontal: 0, paddingTop: spacing.md, paddingBottom: spacing.xl },
+  headerRow: {
+    flexDirection: "row", alignItems: "flex-end", justifyContent: "space-between",
+    paddingHorizontal: spacing.xl, marginBottom: spacing.xl,
   },
-  checkinText: { fontFamily: theme.font.body, fontSize: 13, fontWeight: "600", color: theme.colors.onSurface },
-  moodRecap: {
-    flexDirection: "row", alignItems: "center", gap: theme.spacing.md,
-    padding: theme.spacing.lg, borderRadius: theme.radius.lg, marginBottom: theme.spacing.lg,
+  eyebrow: { ...type.overline },
+  name: { ...type.h1, marginTop: 4 },
+  moodCard: {
+    marginHorizontal: spacing.xl,
+    gap: spacing.md,
   },
+  moodTop: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
   moodEmoji: { fontSize: 28 },
-  moodLabel: { fontFamily: theme.font.display, fontSize: 18, fontWeight: "500" },
-  moodHint: { fontFamily: theme.font.body, fontSize: 13, marginTop: 2 },
-  noMoodCard: {
-    backgroundColor: theme.colors.surfaceSecondary,
-    padding: theme.spacing.lg, borderRadius: theme.radius.lg, marginBottom: theme.spacing.lg,
-  },
-  noMoodTitle: { fontFamily: theme.font.display, fontSize: 18, color: theme.colors.onSurface, fontWeight: "500" },
-  noMoodSub: { fontFamily: theme.font.body, fontSize: 13, color: theme.colors.onSurfaceTertiary, marginTop: 4 },
-  chatCta: {
-    borderRadius: theme.radius.lg, overflow: "hidden",
-    borderWidth: 1, borderColor: theme.colors.border,
-    marginBottom: theme.spacing.xl,
-  },
-  chatCtaInner: {
-    flexDirection: "row", alignItems: "center", gap: theme.spacing.md,
-    padding: theme.spacing.lg,
-  },
-  chatIcon: {
-    width: 44, height: 44, borderRadius: 22, backgroundColor: theme.colors.brandPrimary,
+  moodTitle: { ...type.h2, fontSize: 22, lineHeight: 28 },
+  moodHint: { ...type.body },
+  noMoodCard: { marginHorizontal: spacing.xl },
+  noMoodRow: { flexDirection: "row", alignItems: "center", gap: spacing.md },
+  noMoodTitle: { ...type.h3 },
+  noMoodSub: { ...type.caption, marginTop: 2 },
+  lumiCtaWrap: { paddingHorizontal: spacing.xl, marginTop: spacing.md, marginBottom: spacing.sm },
+  lumiCta: {},
+  lumiCtaRow: { flexDirection: "row", alignItems: "center", gap: spacing.md },
+  lumiCircle: {
+    width: 44, height: 44, borderRadius: 22, backgroundColor: colors.lumi,
     alignItems: "center", justifyContent: "center",
   },
-  chatTitle: { fontFamily: theme.font.display, fontSize: 18, color: theme.colors.onSurface, fontWeight: "500" },
-  chatSub: { fontFamily: theme.font.body, fontSize: 13, color: theme.colors.onSurfaceTertiary, marginTop: 2 },
-  section: { marginBottom: theme.spacing.md, marginTop: theme.spacing.sm },
-  sectionRow: {
-    flexDirection: "row", alignItems: "flex-end", gap: theme.spacing.md,
-    marginBottom: theme.spacing.md, marginTop: theme.spacing.sm,
+  lumiCircleInner: {
+    width: 22, height: 22, borderRadius: 11, backgroundColor: colors.lumiSoft,
   },
-  regenBtn: {
-    width: 40, height: 40, borderRadius: 20, backgroundColor: theme.colors.surfaceSecondary,
-    alignItems: "center", justifyContent: "center",
-  },
-  sectionTitle: { fontFamily: theme.font.display, fontSize: 20, color: theme.colors.onSurface, fontWeight: "500" },
-  sectionSubtitle: { fontFamily: theme.font.body, fontSize: 13, color: theme.colors.onSurfaceTertiary, marginTop: 2 },
-  actionsList: { gap: theme.spacing.md, marginBottom: theme.spacing.xl },
-  actionCard: {
-    flexDirection: "row", alignItems: "center", gap: theme.spacing.md,
-    backgroundColor: theme.colors.surfaceSecondary, padding: theme.spacing.lg, borderRadius: theme.radius.lg,
-  },
-  actionCardDone: { opacity: 0.65 },
+  lumiCtaTitle: { ...type.h3, fontSize: 18 },
+  lumiCtaSub: { ...type.caption, marginTop: 2 },
+  actionsList: { paddingHorizontal: spacing.xl, gap: spacing.md, marginBottom: spacing.md },
+  actionCard: { backgroundColor: colors.card },
+  actionInner: { flexDirection: "row", alignItems: "center", gap: spacing.md },
   actionIcon: {
-    width: 40, height: 40, borderRadius: 20, backgroundColor: theme.colors.surface,
+    width: 36, height: 36, borderRadius: 18,
     alignItems: "center", justifyContent: "center",
   },
-  actionTitle: { fontFamily: theme.font.body, fontSize: 15, fontWeight: "700", color: theme.colors.onSurface },
-  actionTitleDone: { textDecorationLine: "line-through" },
-  actionDesc: { fontFamily: theme.font.body, fontSize: 13, color: theme.colors.onSurfaceTertiary, marginTop: 2 },
+  actionTitle: { ...type.body, fontSize: 15, fontWeight: "600" },
+  actionTitleDone: { textDecorationLine: "line-through", color: colors.inkMuted },
+  actionDesc: { ...type.caption, marginTop: 2 },
   durationPill: {
-    backgroundColor: theme.colors.surface, paddingHorizontal: 10, paddingVertical: 4, borderRadius: theme.radius.pill,
+    backgroundColor: colors.bgAlt, paddingHorizontal: 10, paddingVertical: 4, borderRadius: 999,
   },
-  durationText: { fontFamily: theme.font.body, fontSize: 12, color: theme.colors.onSurfaceTertiary, fontWeight: "600" },
-  socialList: { gap: theme.spacing.md },
-  socialCard: {
-    flexDirection: "row", gap: theme.spacing.md,
-    backgroundColor: theme.colors.surfaceSecondary, padding: theme.spacing.lg, borderRadius: theme.radius.lg,
-  },
+  durationText: { ...type.caption, color: colors.ink, fontWeight: "700" },
+  socialList: { paddingHorizontal: spacing.xl, gap: spacing.md },
+  socialCard: { gap: spacing.md },
+  socialTop: { flexDirection: "row", gap: spacing.md, alignItems: "center" },
   socialIcon: {
-    width: 36, height: 36, borderRadius: 18, backgroundColor: theme.colors.surface,
+    width: 36, height: 36, borderRadius: 18, backgroundColor: colors.bgAlt,
     alignItems: "center", justifyContent: "center",
   },
-  socialTitle: { fontFamily: theme.font.body, fontSize: 15, fontWeight: "700", color: theme.colors.onSurface },
-  socialDesc: { fontFamily: theme.font.body, fontSize: 13, color: theme.colors.onSurfaceTertiary, marginTop: 2 },
+  socialTitle: { ...type.body, fontSize: 15, fontWeight: "700" },
+  socialDesc: { ...type.caption, marginTop: 2 },
   promptBubble: {
-    marginTop: theme.spacing.md, backgroundColor: theme.colors.surface,
-    padding: theme.spacing.md, borderRadius: theme.radius.md,
+    backgroundColor: colors.bgAlt, padding: spacing.md, borderRadius: radius.md,
   },
-  promptText: { fontFamily: theme.font.body, fontSize: 13, fontStyle: "italic", color: theme.colors.onSurface, lineHeight: 20 },
+  promptText: { ...type.body, fontSize: 13, fontStyle: "italic", color: colors.ink, lineHeight: 20 },
 });

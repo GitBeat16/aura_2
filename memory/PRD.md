@@ -1,34 +1,35 @@
-# Aura → Lumi — Product Requirements
+# Lumi — Product Requirements
 
 ## Vision
 A mobile-first AI companion for people who feel lonely or stuck. Guides users from emotional state (check-in) to real-world action (chat with Lumi, daily actions, social suggestions, real events).
 
-## v1 – Aura foundations (delivered)
-- **Auth**: JWT email/password (register, login, /me). Secure token storage (SecureStore on mobile, AsyncStorage on web).
-- **Emotional check-in**: 7 pastel mood chips (great/good/okay/low/stuck/anxious/lonely) + optional note. Powers personalization across the app.
-- **Home dashboard**: greeting, latest mood recap, "Talk to Lumi" CTA, mood-personalized Daily Actions, mood-personalized Social Suggestions with copy-ready prompts.
-- **Events**: curated wellness/social events with category chip filter (All/Mindfulness/Social/Movement/Wellness). Sticky header + horizontal chip row.
-- **Profile**: user stats (check-ins, day streak, member-since), recent moods list, sign-out.
+## v4 – UI System Overhaul (delivered)
+Full visual redesign inspired by **Apple Health**, **Headspace**, **Finch**, and **Notion Calendar** — functionality unchanged.
 
-## v2 – Lumi upgrade (delivered)
-- **Character**: replaces the plain "Chat" tab. Lumi is a cute pastel-sage sprout drawn in SVG (react-native-svg) with react-native-reanimated animations. States: **idle** (gentle breathing + blinking + subtle leaf sway), **listening** (perked leaves + attentive tilt + pulsing halo), **thinking** (soft head-tilt), **speaking** (rhythmic mouth open/close + bounce).
-- **Emotions**: Lumi's face reacts to conversation. Model returns an `[emotion]` tag with every reply → drives cheek color, eye shape (happy → smile arcs), and smile width. Emotions: calm · gentle · happy · thoughtful · encouraging · proud · listening.
-- **Voice conversation** (tap-to-toggle):
-  1. User taps mic → Lumi enters `listening` state, mic recording begins (`expo-audio`).
-  2. User taps mic again → recording stops, file uploaded to `POST /api/voice/transcribe` (OpenAI Whisper via Emergent key).
-  3. Transcribed text sent to `POST /api/chat/message` with `voice: true`.
-  4. Lumi's reply is generated with Claude Sonnet 4.5 (`claude-sonnet-4-6`), emotion tag stripped, remainder sent to OpenAI TTS (`sage` voice, 0.95x speed) via Emergent key.
-  5. Reply audio base64-decoded and played (`expo-audio` player). Lumi enters `speaking` state until playback ends.
-- **Text fallback**: mode toggle (Voice / Type) lets users type instead. Same conversation history, same emotion animations, no TTS.
-- **Ambient**: soft pastel gradient background + breathing halo that adapts hue per state.
-
-## v3 – Personalized dynamic tasks + Sounds (delivered)
-- **AI-generated daily tasks**: `GET /api/actions/daily` and `POST /api/actions/regenerate` now call Claude Sonnet 4.5 to produce **5–8 fully personalized micro-tasks** based on the user's latest mood, mood note, and recent conversation with Lumi. Tasks vary in category (connection/reflection/movement/care/calm/reset/growth), duration (1–30m), and icon. Cached per (user, day) in MongoDB `daily_task_sets`; regenerated whenever the user submits a new mood check-in **or** hits every 5th chat turn with Lumi. Home shows all N tasks (no artificial cap of 3) and displays "N gentle nudges · shaped by your <mood> check-in".
-- **Sound design**: 5 procedurally-synthesized CC0 WAV files bundled in `/app/frontend/assets/sounds/` (`tap.wav`, `chime.wav`, `send.wav`, `pop.wav`, `ambient.wav`) generated via `/app/scripts/generate_sounds.py`. New utility `src/utils/sounds.ts` exposes `playSfx(key)`, `toggleAmbient()`, and mute controls. Wired into:
-  - **mood-checkin**: `tap` on chip select, `chime` on submit
-  - **home**: `pop` on task complete, `tap`+`chime` on refresh
-  - **Lumi chat**: `send` when message is dispatched, `chime` on text-mode reply
-  - **ambient**: user-toggleable soft pad loop on the Lumi screen (volume icon in header)
+- **Design system tokens** in `/app/frontend/src/theme.ts`:
+  - Color: semantic (`bg`, `card`, `ink`, `inkMuted`) + brand (`lumi`, `lumiSoft`) + mood pastels (joy, calm, neutral, sad, anxious, blue, rose) + category accents.
+  - Typography: `display / h1 / h2 / h3 / bodyLarge / body / caption / overline / number`, Georgia (serif) display + system body.
+  - Spacing 8pt scale (xs 4 → xxxxl 64), radius scale (sm 8 → pill), elevation tiers (`sm`, `md`).
+- **Reusable UI kit** in `/app/frontend/src/ui/`:
+  - `Card` (default / flat / tinted / outlined) — Apple-Health-style rounded 24 card with subtle shadow.
+  - `MetricCard` — colored dot + label + large number + hint.
+  - `SectionHeader` — title + caption + right slot.
+  - `PillTag` — pastel category chip.
+  - `StreakBadge` — flame + count.
+  - `EmptyState` — centered icon + title + subtitle.
+  - `PrimaryButton` (black pill), `SecondaryButton` (bordered), `IconButton` (circular), `TextButton`.
+  - `ChipRow` — horizontal filter row (never wraps, sticky-header friendly).
+  - `GlassBar` — sticky top bar backed by `expo-blur`, used on Lumi + Events + tab bar per design constraint.
+- **Screens redesigned** (no behaviour change):
+  - Onboarding: full-bleed pastel gradient hero + "Lumi · your companion" pill + serif display headline.
+  - Auth (login/signup): Notion-Calendar-crisp, tinted labels, monochrome inputs, big black pill CTA.
+  - Mood check-in: 2-column soft pastel chips, optional note in outlined textarea.
+  - Home: greeting eyebrow + serif name, mood recap card in mood's pastel color, "Talk to Lumi" tinted CTA, actions rendered as clean rows with category-accent icon dots + duration pill, social suggestions as tinted cards.
+  - Lumi chat: glass sticky header ("Here with you · Lumi") + ambient/mode icon buttons + animated character centered + editorial bubbles + monochrome pill mic (black idle, rose listening) with pulsing ring.
+  - Events: glass sticky header with "Discover" eyebrow + serif title + `ChipRow` categories; cards with tall image, dark scrim, floating date badge, category tag, meta row, Join pill.
+  - Profile: user header with avatar + logout icon button, 2× `MetricCard` stats, **NEW Weekly Recap** with 3-column mini-stats + AI reflection quote (`lumiSoft` background) + Share button (uses native `Share.share`), **NEW Habit Streaks** list with flame badge per repeated task (auto-fades when streak is paused), Recent Moods list, primary "New check-in" CTA at bottom.
+- **Tab bar** now uses `BlurView` glass, custom active-tab pill background, and 4 tabs renamed to `Today · Lumi · Events · You` to match the new voice.
+- **Responsive**: tokens scale down at ≤360 via type styles; safe-area handled on all screens.
 
 ## Backend endpoints
 | Method | Path | Auth | Purpose |
@@ -47,16 +48,17 @@ A mobile-first AI companion for people who feel lonely or stuck. Guides users fr
 | GET  | /api/actions/daily | ✅ | 5–8 AI-personalized tasks (cached per day) |
 | POST | /api/actions/regenerate | ✅ | Force new AI-generated task set |
 | POST | /api/actions/complete | ✅ | Mark action done today |
+| GET  | /api/stats/task-streaks | ✅ | Per-task streaks with active flag |
+| GET  | /api/stats/weekly-recap | ✅ | Rolling 7-day metrics + AI-written reflection + shareable text |
 | GET  | /api/social/suggestions | ✅ | Mood-personalized social prompts |
 | GET  | /api/events | ✅ | Curated events (optional category) |
 | GET  | /api/events/categories | ✅ | Category list |
 
 ## Integrations
-- **Claude Sonnet 4.5** (`claude-sonnet-4-6`) — empathetic chat (via emergentintegrations + EMERGENT_LLM_KEY)
-- **OpenAI Whisper** (`whisper-1`) — STT
-- **OpenAI TTS** (`tts-1`, voice=`sage`, speed=0.95) — Lumi's calm, warm voice
-- All three keyed by a single `EMERGENT_LLM_KEY` in `/app/backend/.env`.
+- Claude Sonnet 4.5 for empathetic Lumi chat, daily task generation, and weekly recap reflection.
+- OpenAI Whisper for STT, OpenAI TTS (`sage` voice, 0.95× speed) for Lumi's voice.
+- All routed through the Emergent Universal LLM key in `/app/backend/.env`.
 
 ## Constraints / Notes
-- Voice must run on a real device (mic permission). Expo Web preview shows Lumi's animations but cannot record.
-- Events are curated seeds; a real API (e.g., Ticketmaster) can be plugged in later.
+- Voice requires a real device build (mic permission). Web preview shows character + all animations, plays TTS if the browser allows autoplay.
+- Events currently served from a curated seed; a real API (e.g., Ticketmaster) can be plugged in later.

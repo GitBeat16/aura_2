@@ -6,8 +6,9 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { Image } from "expo-image";
 import { LinearGradient } from "expo-linear-gradient";
 import { Feather } from "@expo/vector-icons";
-import { theme } from "@/src/theme";
+import { colors, spacing, type, radius } from "@/src/theme";
 import { api, EventItem } from "@/src/api";
+import { GlassBar, ChipRow, Card, EmptyState, PillTag } from "@/src/ui";
 
 export default function Events() {
   const [events, setEvents] = useState<EventItem[]>([]);
@@ -19,8 +20,7 @@ export default function Events() {
   const load = useCallback(async (cat: string) => {
     try {
       const [ev, cats] = await Promise.all([api.events(cat), api.eventCategories()]);
-      setEvents(ev);
-      setCategories(cats.categories);
+      setEvents(ev); setCategories(cats.categories);
     } catch {}
   }, []);
 
@@ -30,60 +30,28 @@ export default function Events() {
 
   return (
     <SafeAreaView style={styles.safe} edges={["top"]}>
-      {/* Sticky Header */}
-      <View style={styles.stickyHeader}>
-        <View style={styles.headerRow}>
-          <View style={{ flex: 1 }}>
-            <Text style={styles.hello}>Discover</Text>
-            <Text style={styles.title}>A place to show up.</Text>
-          </View>
-        </View>
-
-        {/* Chip row */}
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.chipRow}
-          style={styles.chipScroll}
-        >
-          {categories.map((c) => {
-            const active = selected === c;
-            return (
-              <Pressable
-                key={c}
-                testID={`events-chip-${c.toLowerCase()}`}
-                onPress={() => setSelected(c)}
-                style={[
-                  styles.chip,
-                  active ? { backgroundColor: theme.colors.surfaceInverse, borderColor: theme.colors.surfaceInverse }
-                         : { backgroundColor: theme.colors.surface, borderColor: theme.colors.border },
-                ]}
-              >
-                <Text style={[styles.chipText, { color: active ? theme.colors.onSurfaceInverse : theme.colors.onSurface }]}>{c}</Text>
-              </Pressable>
-            );
-          })}
-        </ScrollView>
-      </View>
+      <GlassBar
+        subtitle="Discover"
+        title="A place to show up."
+      >
+        <ChipRow items={categories} selected={selected} onSelect={setSelected} testIDPrefix="events-chip" />
+      </GlassBar>
 
       <ScrollView
         contentContainerStyle={styles.scroll}
         showsVerticalScrollIndicator={false}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={theme.colors.brandPrimary} />}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.lumi} />}
       >
         {loading ? (
           <View style={styles.center}>
-            <ActivityIndicator color={theme.colors.brandPrimary} />
+            <ActivityIndicator color={colors.lumi} />
           </View>
         ) : events.length === 0 ? (
-          <View style={styles.empty}>
-            <Text style={styles.emptyTitle}>No events here yet.</Text>
-            <Text style={styles.emptySub}>Try another category.</Text>
-          </View>
+          <EmptyState title="No events here yet" subtitle="Try another category." icon="calendar" />
         ) : (
           events.map((e) => <EventCard key={e.id} event={e} />)
         )}
-        <View style={{ height: theme.spacing.xxl }} />
+        <View style={{ height: 120 }} />
       </ScrollView>
     </SafeAreaView>
   );
@@ -91,9 +59,9 @@ export default function Events() {
 
 function EventCard({ event }: { event: EventItem }) {
   return (
-    <View testID={`event-card-${event.id}`} style={styles.card}>
-      <View style={styles.cardImageWrap}>
-        <Image source={{ uri: event.image_url }} style={styles.cardImage} contentFit="cover" />
+    <Card testID={`event-card-${event.id}`} padding={0} style={{ overflow: "hidden" }}>
+      <View style={styles.imageWrap}>
+        <Image source={{ uri: event.image_url }} style={styles.image} contentFit="cover" />
         <LinearGradient
           colors={["rgba(0,0,0,0)", "rgba(0,0,0,0.55)"]}
           locations={[0.4, 1]}
@@ -105,22 +73,22 @@ function EventCard({ event }: { event: EventItem }) {
         </View>
         {event.is_virtual && (
           <View style={styles.virtualBadge}>
-            <Feather name="video" size={12} color={theme.colors.onSurfaceInverse} />
+            <Feather name="video" size={12} color="#FFFFFF" />
             <Text style={styles.virtualText}>Virtual</Text>
           </View>
         )}
       </View>
-      <View style={styles.cardBody}>
-        <Text style={styles.cardCategory}>{event.category}</Text>
+      <View style={styles.body}>
+        <PillTag label={event.category} tint={colors.bgAlt} />
         <Text style={styles.cardTitle}>{event.title}</Text>
         <Text style={styles.cardDesc} numberOfLines={2}>{event.description}</Text>
-        <View style={styles.cardMetaRow}>
+        <View style={styles.metaRow}>
           <View style={styles.metaItem}>
-            <Feather name="map-pin" size={13} color={theme.colors.onSurfaceTertiary} />
+            <Feather name="map-pin" size={13} color={colors.inkMuted} />
             <Text style={styles.metaText} numberOfLines={1}>{event.location}</Text>
           </View>
           <View style={styles.metaItem}>
-            <Feather name="clock" size={13} color={theme.colors.onSurfaceTertiary} />
+            <Feather name="clock" size={13} color={colors.inkMuted} />
             <Text style={styles.metaText}>{event.time}</Text>
           </View>
         </View>
@@ -131,58 +99,41 @@ function EventCard({ event }: { event: EventItem }) {
           </Pressable>
         </View>
       </View>
-    </View>
+    </Card>
   );
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: theme.colors.surface },
-  stickyHeader: { backgroundColor: theme.colors.surface, paddingTop: theme.spacing.md, borderBottomWidth: 1, borderBottomColor: theme.colors.border },
-  headerRow: { paddingHorizontal: theme.spacing.xl, paddingBottom: theme.spacing.md },
-  hello: { fontFamily: theme.font.body, fontSize: 13, color: theme.colors.onSurfaceTertiary, letterSpacing: 1, textTransform: "uppercase" },
-  title: { fontFamily: theme.font.display, fontSize: 26, color: theme.colors.onSurface, fontWeight: "500", marginTop: 2 },
-  chipScroll: { height: 56 },
-  chipRow: { paddingHorizontal: theme.spacing.xl, gap: theme.spacing.sm, alignItems: "center", height: 56 },
-  chip: {
-    height: 36, paddingHorizontal: 16, borderRadius: theme.radius.pill,
-    alignItems: "center", justifyContent: "center", borderWidth: 1, flexShrink: 0,
-  },
-  chipText: { fontFamily: theme.font.body, fontSize: 13, fontWeight: "600" },
-  scroll: { paddingHorizontal: theme.spacing.xl, paddingTop: theme.spacing.lg, gap: theme.spacing.lg },
+  safe: { flex: 1, backgroundColor: colors.bg },
+  scroll: { paddingHorizontal: spacing.xl, paddingTop: spacing.lg, gap: spacing.lg },
   center: { paddingVertical: 60, alignItems: "center" },
-  empty: { paddingVertical: 60, alignItems: "center", gap: theme.spacing.sm },
-  emptyTitle: { fontFamily: theme.font.display, fontSize: 20, color: theme.colors.onSurface },
-  emptySub: { fontFamily: theme.font.body, fontSize: 13, color: theme.colors.onSurfaceTertiary },
-  card: {
-    backgroundColor: theme.colors.surfaceSecondary, borderRadius: theme.radius.lg, overflow: "hidden",
-    marginBottom: theme.spacing.md,
-  },
-  cardImageWrap: { height: 180, position: "relative" },
-  cardImage: { width: "100%", height: "100%" },
+  imageWrap: { height: 180, position: "relative" },
+  image: { width: "100%", height: "100%" },
   dateBadge: {
-    position: "absolute", top: theme.spacing.md, left: theme.spacing.md,
-    backgroundColor: theme.colors.surface, paddingHorizontal: 12, paddingVertical: 6,
-    borderRadius: theme.radius.md, alignItems: "center",
+    position: "absolute", top: spacing.md, left: spacing.md,
+    backgroundColor: "rgba(255,255,255,0.92)", paddingHorizontal: 12, paddingVertical: 6,
+    borderRadius: radius.sm, alignItems: "center",
   },
-  dateBadgeText: { fontFamily: theme.font.body, fontSize: 11, fontWeight: "700", color: theme.colors.onSurface, textTransform: "uppercase" },
-  dateBadgeSub: { fontFamily: theme.font.body, fontSize: 11, color: theme.colors.onSurfaceTertiary },
+  dateBadgeText: { ...type.overline, color: colors.ink, fontWeight: "700" },
+  dateBadgeSub: { ...type.caption, color: colors.inkMuted, fontSize: 11 },
   virtualBadge: {
-    position: "absolute", top: theme.spacing.md, right: theme.spacing.md,
+    position: "absolute", top: spacing.md, right: spacing.md,
     flexDirection: "row", alignItems: "center", gap: 4,
-    backgroundColor: "rgba(42,42,40,0.8)", paddingHorizontal: 10, paddingVertical: 5, borderRadius: theme.radius.pill,
+    backgroundColor: "rgba(26,26,26,0.85)", paddingHorizontal: 10, paddingVertical: 5, borderRadius: 999,
   },
-  virtualText: { fontFamily: theme.font.body, fontSize: 11, color: theme.colors.onSurfaceInverse, fontWeight: "600" },
-  cardBody: { padding: theme.spacing.lg, gap: theme.spacing.xs },
-  cardCategory: { fontFamily: theme.font.body, fontSize: 11, color: theme.colors.onSurfaceTertiary, letterSpacing: 1, textTransform: "uppercase", fontWeight: "600" },
-  cardTitle: { fontFamily: theme.font.display, fontSize: 18, color: theme.colors.onSurface, fontWeight: "500", marginTop: 2 },
-  cardDesc: { fontFamily: theme.font.body, fontSize: 13, color: theme.colors.onSurfaceTertiary, lineHeight: 20, marginTop: 4 },
-  cardMetaRow: { flexDirection: "row", gap: theme.spacing.lg, marginTop: theme.spacing.sm, flexWrap: "wrap" },
+  virtualText: { color: "#FFFFFF", fontSize: 11, fontWeight: "600" },
+  body: { padding: spacing.lg, gap: spacing.xs },
+  cardTitle: { ...type.h3, fontSize: 18, marginTop: spacing.sm },
+  cardDesc: { ...type.caption, color: colors.inkMuted, lineHeight: 20, marginTop: 4 },
+  metaRow: { flexDirection: "row", gap: spacing.lg, marginTop: spacing.sm, flexWrap: "wrap" },
   metaItem: { flexDirection: "row", alignItems: "center", gap: 6 },
-  metaText: { fontFamily: theme.font.body, fontSize: 12, color: theme.colors.onSurfaceTertiary, maxWidth: 140 },
+  metaText: { ...type.caption, maxWidth: 140 },
   cardFooter: {
-    marginTop: theme.spacing.md, flexDirection: "row", alignItems: "center", justifyContent: "space-between",
+    marginTop: spacing.md, flexDirection: "row", alignItems: "center", justifyContent: "space-between",
   },
-  attendees: { fontFamily: theme.font.body, fontSize: 13, color: theme.colors.onSurfaceTertiary },
-  joinBtn: { backgroundColor: theme.colors.surfaceInverse, paddingHorizontal: 20, paddingVertical: 10, borderRadius: theme.radius.pill },
-  joinText: { fontFamily: theme.font.body, fontSize: 13, fontWeight: "700", color: theme.colors.onSurfaceInverse },
+  attendees: { ...type.caption },
+  joinBtn: {
+    backgroundColor: colors.ink, paddingHorizontal: 20, paddingVertical: 10, borderRadius: 999,
+  },
+  joinText: { color: "#FFFFFF", fontSize: 13, fontWeight: "700" },
 });
