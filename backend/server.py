@@ -659,6 +659,206 @@ async def complete_action(payload: ActionCompletePayload, user=Depends(get_curre
     )
 
 
+# =========================== STATS / STREAKS / WEEKLY RECAP ===========================
+class TaskStreak(BaseModel):
+    title: str
+    icon: str
+    current_streak: int
+    total_completions: int
+    last_completed: Optional[datetime] = None
+    is_active: bool  # true if completed today or yesterday
+
+
+class WeeklyRecap(BaseModel):
+    week_start: str
+    week_end: str
+    tasks_completed: int
+    days_active: int
+    moods_logged: int
+    top_mood: Optional[str] = None
+    longest_daily_streak: int
+    reflection: str  # AI-written warm reflection
+    share_text: str  # plain-text share message
+
+
+def _day_str(dt: datetime) -> str:
+    return dt.astimezone(timezone.utc).strftime("%Y-%m-%d")
+
+
+async def _compute_task_streaks(user_id: str, min_streak: int = 1) -> List[TaskStreak]:
+    """For every distinct task title the user has completed, compute the current
+    consecutive-day streak ending at the most recent completion day.
+    Streak is considered 'active' if last completion was today or yesterday."""
+    docs = await db.action_completions.find(
+        {"user_id": user_id}, {"_id": 0}
+    ).sort("completed_at", -1).to_list(2000)
+    if not docs:
+        return []
+
+    # Map task -> ordered set of unique completion day-strings (desc)
+    days_by_title: dict[str, list[str]] = {}
+    counts_by_title: dict[str, int] = {}
+    last_by_title: dict[str, datetime] = {}
+    for d in docs:
+        title = d["action_title"]
+        day = _day_str(d["completed_at"])
+        days_by_title.setdefault(title, [])
+        if day not in days_by_title[title]:
+            days_by_title[title].append(day)
+        counts_by_title[title] = counts_by_title.get(title, 0) + 1
+        if title not in last_by_title:
+            last_by_title[title] = d["completed_at"]
+
+    today = _day_str(datetime.now(timezone.utc))
+    yesterday = _day_str(datetime.now(timezone.utc) - timedelta(days=1))
+
+    # Also pull icons from the most recent daily_task_sets for prettier display
+    icon_map: dict[str, str] = {}
+    latest_sets = await db.daily_task_sets.find(
+        {"user_id": user_id}, {"_id": 0}
+    ).sort("generated_at", -1).to_list(30)
+    for s in latest_sets:
+        for t in s.get("tasks", []):
+            icon_map.setdefault(t["title"], t.get("icon", "check-square"))
+
+    streaks: list[TaskStreak] = []
+    for title, days in days_by_title.items():
+        if not days:
+            continue
+        # days are already deduped and roughly descending
+        days_sorted = sorted(days, reverse=True)
+        # count consecutive daily completions starting from the most recent day
+        current = 1
+        for i in range(1, len(days_sorted)):
+            prev = datetime.strptime(days_sorted[i - 1], "%Y-%m-%d")
+            cur = datetime.strptime(days_sorted[i], "%Y-%m-%d")
+            if (prev - cur).days == 1:
+                current += 1
+            else:
+                break
+        is_active = days_sorted[0] in (today, yesterday)
+        if current < min_streak:
+            continue
+        streaks.append(TaskStreak(
+            title=title,
+            icon=icon_map.get(title, "check-square"),
+            current_streak=current,
+            total_completions=counts_by_title[title],
+            last_completed=last_by_title[title],
+            is_active=is_active,
+        ))
+    # sort: active streaks first, then by streak length desc
+    streaks.sort(key=lambda s: (not s.is_active, -s.current_streak, -s.total_completions))
+    return streaks
+
+
+@api_router.get("/stats/task-streaks", response_model=List[TaskStreak])
+async def task_streaks(user=Depends(get_current_user)):
+    return await _compute_task_streaks(user["id"], min_streak=1)
+
+
+@api_router.get("/stats/weekly-recap", response_model=WeeklyRecap)
+async def weekly_recap(user=Depends(get_current_user)):
+    now = datetime.now(timezone.utc)
+    # Rolling 7 days including today
+    week_start_dt = now - timedelta(days=6)
+    week_start = week_start_dt.strftime("%Y-%m-%d")
+    week_end = now.strftime("%Y-%m-%d")
+    week_start_full = week_start_dt.replace(hour=0, minute=0, second=0, microsecond=0)
+
+    comp_docs = await db.action_completions.find(
+        {"user_id": user["id"], "completed_at": {"$gte": week_start_full}}, {"_id": 0}
+    ).to_list(500)
+
+    mood_docs = await db.moods.find(
+        {"user_id": user["id"], "created_at": {"$gte": week_start_full}}, {"_id": 0}
+    ).to_list(200)
+
+    tasks_completed = len(comp_docs)
+    days_active = len({_day_str(d["completed_at"]) for d in comp_docs})
+    moods_logged = len(mood_docs)
+
+    # Top mood
+    top_mood: Optional[str] = None
+    if mood_docs:
+        from collections import Counter
+        cnt = Counter(m["mood"] for m in mood_docs)
+        top_mood = cnt.most_common(1)[0][0]
+
+    # Longest consecutive-day streak across ANY task completion in the week
+    day_set = sorted({_day_str(d["completed_at"]) for d in comp_docs}, reverse=True)
+    longest = 0
+    cur = 0
+    prev_day: Optional[datetime] = None
+    for d in day_set:
+        dt = datetime.strptime(d, "%Y-%m-%d")
+        if prev_day is None or (prev_day - dt).days == 1:
+            cur += 1
+        else:
+            cur = 1
+        longest = max(longest, cur)
+        prev_day = dt
+
+    # Top task titles this week
+    from collections import Counter
+    title_counts = Counter(d["action_title"] for d in comp_docs)
+    top_titles = [t for t, _ in title_counts.most_common(3)]
+
+    # AI reflection
+    reflection = ""
+    try:
+        ctx = (
+            f"Rolling 7-day recap for the user:\n"
+            f"- Tasks completed: {tasks_completed}\n"
+            f"- Active days: {days_active}/7\n"
+            f"- Mood check-ins: {moods_logged}\n"
+            f"- Most common mood: {top_mood or 'none'}\n"
+            f"- Longest daily streak this week: {longest}\n"
+            f"- Repeated favorite tasks: {', '.join(top_titles) if top_titles else 'none yet'}\n"
+        )
+        chat = LlmChat(
+            api_key=EMERGENT_LLM_KEY,
+            session_id=f"recap-{user['id']}-{week_end}",
+            system_message=(
+                "You are Lumi, a warm AI companion writing a gentle weekly reflection for the user. "
+                "Return ONE short paragraph (2-3 sentences, max 260 characters). Second person ('you'). "
+                "Warm, human, honest. Celebrate any progress. If numbers are low, be kind and never shame. "
+                "No emojis. No hashtags. No bullet lists."
+            ),
+        ).with_model("anthropic", "claude-sonnet-4-6")
+        reflection = (await chat.send_message(UserMessage(text=ctx))).strip()
+        if len(reflection) > 320:
+            reflection = reflection[:317] + "..."
+    except Exception as e:
+        logger.warning(f"recap AI failed: {e}")
+        reflection = (
+            f"This week you showed up on {days_active} day{'s' if days_active != 1 else ''}, "
+            f"finished {tasks_completed} small step{'s' if tasks_completed != 1 else ''} "
+            f"and checked in {moods_logged} time{'s' if moods_logged != 1 else ''}. "
+            "That's real, and it counts."
+        )
+
+    share_text = (
+        f"My week with Lumi:\n"
+        f"• {tasks_completed} small step{'s' if tasks_completed != 1 else ''} completed\n"
+        f"• {days_active}/7 days active\n"
+        f"• Longest streak: {longest} day{'s' if longest != 1 else ''}\n\n"
+        f"\"{reflection}\""
+    )
+
+    return WeeklyRecap(
+        week_start=week_start,
+        week_end=week_end,
+        tasks_completed=tasks_completed,
+        days_active=days_active,
+        moods_logged=moods_logged,
+        top_mood=top_mood,
+        longest_daily_streak=longest,
+        reflection=reflection,
+        share_text=share_text,
+    )
+
+
 # =========================== SOCIAL SUGGESTIONS ===========================
 @api_router.get("/social/suggestions", response_model=List[SocialSuggestion])
 async def social_suggestions(user=Depends(get_current_user)):
