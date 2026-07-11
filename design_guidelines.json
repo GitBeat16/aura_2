@@ -1,186 +1,180 @@
 {
-  "app_name": "Aura",
-  "personality": "8 Hand-Drawn / Journal structure with 1 iOS-Native Clean minimal spacing and soft pastel gradients",
-  "personality_one_liner": "A quiet, empathetic digital space that feels like a calming breath, blending tactile journaling warmth with minimalist clarity.",
-  "color": {
-    "surface": "#FDFBF7",
-    "onSurface": "#2A2A28",
-    "surfaceSecondary": "#F5F2EA",
-    "onSurfaceSecondary": "#3D3D3A",
-    "surfaceTertiary": "#EAE5D9",
-    "onSurfaceTertiary": "#5C5C58",
-    "surfaceInverse": "#2A2A28",
-    "onSurfaceInverse": "#FDFBF7",
-    "brand": "#9EADA0",
-    "brandPrimary": "#9EADA0",
-    "onBrandPrimary": "#1D261F",
-    "brandSecondary": "#D8AE99",
-    "onBrandSecondary": "#302018",
-    "brandTertiary": "#D9DCE0",
-    "onBrandTertiary": "#26282B",
-    "success": "#A7C4A5",
-    "onSuccess": "#1F301E",
-    "warning": "#E0C09A",
-    "onWarning": "#3D2910",
-    "error": "#D69595",
-    "onError": "#381414",
-    "info": "#A6BACC",
-    "onInfo": "#17232E",
-    "border": "#EAE5D9",
-    "borderStrong": "#D1CCC0",
-    "divider": "#EAE5D9"
-  },
-  "typography": {
-    "displayFontFamily": "Fraunces",
-    "textFontFamily": "Nunito",
-    "scale": {
-      "sm": 12,
-      "base": 14,
-      "lg": 16,
-      "xl": 20,
-      "2xl": 24
+  "app_name": "Lumi",
+  "theme_archetype": "ORGANIC & EARTHY mixed with PASTEL & SOFT",
+  "instructions_to_main_agent": [
+    "Redesign every screen using the design system below. Do NOT change functionality.",
+    "Use React Native primitives (View, Text, TouchableOpacity, ScrollView, FlatList).",
+    "DO NOT use Skia, SVG gradients, or text gradients.",
+    "Apply Apple Health spacing (generous padding) and Notion Calendar crisp typography.",
+    "Apply Finch-like cozy pastels sparingly for mood chips and cards.",
+    "Use expo-blur for sticky headers and tab bars ONLY."
+  ],
+  "color_tokens": {
+    "background": {
+      "primary": "#F9FAF9",
+      "secondary": "#F3F5F3",
+      "card": "#FFFFFF",
+      "glass": "rgba(249, 250, 249, 0.85)"
+    },
+    "text": {
+      "primary": "#1A1A1A",
+      "secondary": "#737373",
+      "tertiary": "#A3A3A3"
+    },
+    "brand": {
+      "lumiGreen": "#8BA888",
+      "lumiGreenLight": "#E2EBE2"
+    },
+    "mood_pastels": {
+      "joy": "#FDF2D5",
+      "calm": "#E0EFE5",
+      "neutral": "#F3F5F3",
+      "sad": "#D3CBE7",
+      "anxious": "#F5C3B8",
+      "angry": "#F0B4B4",
+      "tired": "#C1DCE8"
+    },
+    "border": {
+      "subtle": "#E5E5E5",
+      "focus": "#8BA888"
     }
   },
-  "spacing": {
-    "rule": "Generous vertical breathing room. Avoid dense clusters; give emotional prompts space to be absorbed.",
+  "typography_scale": {
+    "fonts": {
+      "display": "Georgia",
+      "body": "System"
+    },
+    "sizes": {
+      "h1": { "fontSize": 36, "fontFamily": "Georgia", "lineHeight": 44, "letterSpacing": -0.5 },
+      "h2": { "fontSize": 28, "fontFamily": "Georgia", "lineHeight": 36, "letterSpacing": -0.3 },
+      "h3": { "fontSize": 22, "fontFamily": "Georgia", "lineHeight": 28, "letterSpacing": 0 },
+      "bodyLarge": { "fontSize": 18, "fontFamily": "System", "lineHeight": 26, "letterSpacing": 0 },
+      "body": { "fontSize": 16, "fontFamily": "System", "lineHeight": 24, "letterSpacing": 0 },
+      "caption": { "fontSize": 13, "fontFamily": "System", "lineHeight": 18, "letterSpacing": 0.2 },
+      "overline": { "fontSize": 11, "fontFamily": "System", "lineHeight": 14, "letterSpacing": 1.0, "textTransform": "uppercase" }
+    }
+  },
+  "spacing_rhythm": {
     "xs": 4,
     "sm": 8,
     "md": 12,
     "lg": 16,
     "xl": 24,
     "2xl": 32,
-    "3xl": 48
+    "3xl": 48,
+    "4xl": 64
   },
-  "radius_tokens": {
-    "sm": 6,
-    "md": 12,
-    "lg": 20,
-    "pill": 999
+  "radius_scale": {
+    "sm": 8,
+    "md": 16,
+    "lg": 24,
+    "xl": 32,
+    "pill": 9999
   },
-  "shadow_tier": "0",
-  "navigation": "bottom_tabs",
-  "icon_set": "Feather",
-  "glassmorphism": {
-    "enabled": true,
-    "do's": [
-      "Use over the bottom tab bar so content scrolls softly behind",
-      "Use for the sticky top headers on the Home and Chat screens",
-      "Use as a backing container for sticky bottom CTAs"
-    ],
-    "dont's": [
-      "Do not use on regular cards or chat bubbles",
-      "Do not use on form inputs"
-    ]
+  "elevation_tiers": {
+    "none": { "shadowColor": "transparent", "elevation": 0 },
+    "sm": { "shadowColor": "#000", "shadowOffset": { "width": 0, "height": 2 }, "shadowOpacity": 0.04, "shadowRadius": 8, "elevation": 2 },
+    "md": { "shadowColor": "#000", "shadowOffset": { "width": 0, "height": 4 }, "shadowOpacity": 0.06, "shadowRadius": 16, "elevation": 4 }
   },
-  "platform_libraries": {
-    "glass": {
-      "ios": "expo-glass-effect",
-      "android": "expo-blur",
-      "low_end_android_fallback": "solid surfaceSecondary"
-    },
-    "image": "expo-image",
-    "blur": "expo-blur",
-    "bottom_sheet": "@gorhom/bottom-sheet",
-    "animation": "react-native-reanimated",
-    "gesture": "react-native-gesture-handler"
+  "glassmorphism_tokens": {
+    "rules": "Use ONLY for sticky top bars and tab bar backgrounds.",
+    "implementation": "import { BlurView } from 'expo-blur'; <BlurView intensity={50} tint='light' style={StyleSheet.absoluteFill} />"
   },
-  "screens": [
+  "icon_set": {
+    "library": "@expo/vector-icons",
+    "family": "Feather",
+    "strokeWidth": 2,
+    "defaultSize": 24
+  },
+  "motion_timings": {
+    "fast": 150,
+    "base": 250,
+    "slow": 400,
+    "easing": "ease-out"
+  },
+  "component_recipes": [
     {
-      "name": "Onboarding",
-      "purpose": "Establish a calming, safe space instantly with a soothing full-bleed pastel image and empathetic messaging.",
-      "states": {
-        "loading": "Centered soft spinner",
-        "empty": "N/A",
-        "error": "N/A"
-      },
-      "layout": "Full-bleed image background covering the safe area. A top-down transparent-to-dark scrim (gradient) is mandatory over the bottom 50%. The primary CTA (Get Started) sits at the very bottom inside the safe area, using brandPrimary, styled as a pill button."
+      "name": "MetricCard",
+      "description": "Large glanceable numbers inspired by Apple Health.",
+      "styles": "bg: card, radius: lg (24), padding: xl (24), shadow: sm, layout: column with h2 size for number, overline for label."
     },
     {
-      "name": "Auth",
-      "purpose": "Low-friction, low-cognitive-load login and signup.",
-      "states": {
-        "loading": "Inline button spinner",
-        "empty": "N/A",
-        "error": "Soft inline error text below input"
-      },
-      "layout": "Single column layout. Generous top padding. Inputs use surfaceSecondary backgrounds with no borders, deeply rounded corners (lg). Large, friendly typographic hierarchy."
+      "name": "ContentCard",
+      "description": "Standard white card for feed items.",
+      "styles": "bg: card, radius: lg (24), padding: xl (24), shadow: md, border: subtle."
     },
     {
-      "name": "MoodCheckIn",
-      "purpose": "Allow the user to log their emotional state using soft, un-intimidating interactions.",
-      "states": {
-        "loading": "Spinner in center",
-        "empty": "N/A",
-        "error": "Toast with retry"
-      },
-      "layout": "A full-screen modal or dedicated screen. Large display typography asking 'How are you feeling?'. Use a grid of oversized pill-shaped chips for moods, or a large horizontal slider. Colors of chips shift between pastel sage, peach, and sky blue depending on the mood type."
+      "name": "ChipRow",
+      "description": "Horizontal scrollable list of filter chips.",
+      "styles": "ScrollView horizontal, gap: sm (8), paddingHorizontal: xl (24)."
     },
     {
-      "name": "Home",
-      "purpose": "A personalized dashboard that ties the user's mood to immediate, bite-sized actions.",
-      "states": {
-        "loading": "Skeleton cards mimicking the layout structure",
-        "empty": "Illustration of a quiet room, 'Let's check in on how you're doing.'",
-        "error": "Friendly text 'We lost connection, pull to refresh' + Retry button"
-      },
-      "layout": "Top section: Glass header greeting + current mood recap. Middle section: A prominent 'Chat with AI' call-out card, using a soft 2-stop gradient (surface to brandTertiary at 10% opacity). Lower sections: Horizontal scroll for 'Daily Actions' (small squarish cards) and a vertical list for 'Social Connections'."
+      "name": "PrimaryButton",
+      "description": "Main CTA.",
+      "styles": "bg: lumiGreen, radius: pill, paddingVertical: lg (16), paddingHorizontal: 2xl (32), align: center, text: bodyLarge (white)."
     },
     {
-      "name": "Chat",
-      "purpose": "Empathetic, streaming AI companion conversation.",
-      "states": {
-        "loading": "Three pulsing dots in a chat bubble",
-        "empty": "A soft welcome prompt from the AI, e.g., 'I'm here to listen.'",
-        "error": "Error icon next to the failed message with a tap-to-retry prompt"
-      },
-      "layout": "Standard chat interface but softened. AI bubbles use surfaceSecondary, user bubbles use brandTertiary. Bubbles have generous padding (lg) and asymmetrical radii (e.g., bottom-left smaller for AI). Input field is a floating pill resting above the keyboard with a subtle blur background."
+      "name": "SecondaryButton",
+      "description": "Alternative CTA.",
+      "styles": "bg: transparent, border: subtle, radius: pill, paddingVertical: lg (16), paddingHorizontal: 2xl (32), align: center, text: bodyLarge (primary)."
     },
     {
-      "name": "EventDiscovery",
-      "purpose": "Encourage real-world or virtual connection through curated wellness events.",
-      "states": {
-        "loading": "Skeleton event cards",
-        "empty": "Soft illustration + 'No events in your area just yet.'",
-        "error": "Error text + Retry CTA"
-      },
-      "layout": "Vertical scroll. Event cards use edge-to-edge images at the top half with a gradient scrim protecting the 'Date/Time' badge. Bottom half is surfaceSecondary with the title, location, and a prominent 'Join' CTA."
+      "name": "IconButton",
+      "description": "Circular button for quick actions (e.g. Mic).",
+      "styles": "bg: card or lumiGreenLight, radius: pill, width/height: 56, align/justify: center, shadow: sm."
+    },
+    {
+      "name": "PillTag",
+      "description": "Small category or mood tag.",
+      "styles": "bg: mood_pastel matching category, radius: pill, paddingVertical: xs (4), paddingHorizontal: md (12), text: overline."
+    },
+    {
+      "name": "EmptyState",
+      "description": "Placeholder for empty sections.",
+      "styles": "align/justify: center, padding: 3xl (48), image max-h 150, text: h3 (center) + body (center textSecondary)."
+    },
+    {
+      "name": "StreakBadge",
+      "description": "Displays user streaks with a flame icon.",
+      "styles": "flexRow, align: center, bg: joy (pastel yellow), radius: pill, paddingVertical: 4, paddingHorizontal: 8, gap: 4, text: caption."
     }
   ],
-  "images": {
-    "onboarding_hero": {
-      "url": "https://images.unsplash.com/photo-1474540412665-1cdae210ae6b?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjY2NjV8MHwxfHNlYXJjaHwxfHxjYWxtJTIwbWluaW1hbGlzdCUyMHNreSUyMHBhc3RlbHxlbnwwfHx8fDE3ODI4NTA4NTh8MA&ixlib=rb-4.1.0&q=85",
-      "alt": "Soft minimalist pastel sea and sky"
-    },
-    "social_connection_card": {
-      "url": "https://images.pexels.com/photos/6340713/pexels-photo-6340713.jpeg",
-      "alt": "Three young adults enjoying coffee"
-    },
-    "action_nature_walk": {
-      "url": "https://images.unsplash.com/photo-1594048023785-02c76ee32c10",
-      "alt": "Green grass and trees during daytime"
-    },
-    "action_meditation": {
-      "url": "https://images.pexels.com/photos/21032118/pexels-photo-21032118.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940",
-      "alt": "Abstract warm sunset ocean seascape"
-    }
+  "screen_by_screen_notes": {
+    "Onboarding": "Full-screen layout. Hero image at top (max-h 40vh). H1 crisp serif for welcoming text. Bottom fixed container with generous padding and PrimaryButton ('Get Started').",
+    "Auth": "Clean Notion-style layout. Left-aligned input labels. 8px radius on inputs with subtle borders. SecondaryButton to toggle Login/Signup.",
+    "Mood_CheckIn": "Use a grid or wrapped flex layout for the 7 pastel mood chips (PillTags scaled up). 'How are you feeling?' in H2 serif. Optional note input uses 16px radius with secondary background.",
+    "Home_Dashboard": "Apple Health vibe. Top greeting left-aligned in serif H1. Use MetricCard for mood recap. 'Talk to Lumi' CTA wrapped in a pastel green ContentCard. AI tasks listed as a sleek vertical list with custom circular checkmarks.",
+    "Lumi_Chat": "Tab bar MUST use glassmorphism. Animated SVG character centered in upper space, surrounded by generous negative space. Chat bubbles: 24px radius, pastel green for user, white for Lumi. Bottom container holds a massive IconButton for the voice mic, and a minimal voice/type toggle.",
+    "Events": "Sticky header MUST use glassmorphism. Below header, horizontal ChipRow for categories. Vertical FlatList of ContentCards for events with 16px gap.",
+    "Profile": "Clean user header. 2-column grid of MetricCards for stats. NEW Weekly Recap section: ContentCard with H2 numbers, AI reflection body text, and SecondaryButton for sharing. NEW Task Streaks: FlatList of tasks where each item includes a StreakBadge on the right. Recent moods as simple list rows."
   },
-  "haptics": {
-    "events": {
-      "tab_press": "light",
-      "mood_chip_select": "medium",
-      "action_card_check": "success",
-      "chat_send": "light",
-      "primary_button_press": "medium"
-    }
+  "responsive_rules": {
+    "small_devices_le_360": "Reduce h1 to 32px, h2 to 24px. Reduce base padding from 24px to 16px. Reduce gap between MetricCards.",
+    "large_devices_ge_390": "Use full 36px for h1. Keep layout padding at 24px. Ensure bottom CTA buttons don't stretch too wide (max-width 400)."
   },
-  "instructions_to_main_agent": [
-    "CRITICAL: Follow the '8 Hand-Drawn / Journal' design guidelines. The UI should feel soft, tactile, and calming.",
-    "NO TOLERANCE: Do not use pure white or pure black. Adhere strictly to the provided color palette (surface is #FDFBF7, onSurface is #2A2A28).",
-    "NO TOLERANCE: Do not use Indigo, Violet, Purple, or Blue tokens. The palette is strictly pastel Sage, Peach, and soft Sky (gray-blue) as accents.",
-    "IMAGERY: For any image with overlaid text (like the onboarding hero or event cards), you MUST implement the gradient-to-dark scrim pattern (transparent to >=70% surfaceInverse at the bottom) to guarantee text contrast.",
-    "TYPOGRAPHY: Use Fraunces (serif) for display/headings to add an editorial, journaling feel, and Nunito (sans-serif) for high-readability body text.",
-    "LAYOUT: Apply generous padding. Elements shouldn't feel crowded. Use soft `md` to `lg` border radii, keeping it friendly.",
-    "CHAT UI: Ensure chat bubbles are well-padded, not tight. Do not use default iOS green/blue; stick to `surfaceSecondary` for AI and `brandTertiary` for the User.",
-    "HAPTICS: Implement the haptic feedback mapping defined in the JSON for tactile engagement without overwhelming the user."
+  "image_urls": [
+    {
+      "url": "https://images.unsplash.com/photo-1627037558426-c2d07beda3af?crop=entropy&cs=srgb&fm=jpg&ixid=M3w3NTY2Njd8MHwxfHNlYXJjaHwxfHxjYWxtaW5nJTIwbWluaW1hbCUyMHBhc3RlbHxlbnwwfHx8fDE3ODM3NDc3NDN8MA&ixlib=rb-4.1.0&q=85",
+      "category": "Onboarding / Hero",
+      "description": "Stacked pastel pink abstract discs - use for onboarding visual or empty states."
+    },
+    {
+      "url": "https://images.unsplash.com/photo-1501004318641-b39e6451bec6?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjAzNzl8MHwxfHNlYXJjaHwyfHxzcHJvdXQlMjBwbGFudCUyMG1pbmltYWx8ZW58MHx8fHwxNzgzNzQ3NzQzfDA&ixlib=rb-4.1.0&q=85",
+      "category": "Profile / Aesthetic",
+      "description": "Minimal green leaf plant - use as a botanical placeholder fitting the Lumi vibe."
+    }
+  ],
+  "general_ui_ux_guidelines": [
+    "All interactive and key informational elements MUST include a testID attribute (e.g., testID='login-button') to facilitate robust automated testing in React Native.",
+    "Optical alignment over geometrical alignment. Ensure icons with text are vertically centered.",
+    "Avoid solid black; use tinted dark tones for text.",
+    "Never use transparent backgrounds under headers/tab bars where content scrolls; always use expo-blur."
+  ],
+  "UNIVERSAL_GUIDELINES_FOR_MAIN_AGENT": [
+    "Don't make generic centered layouts. Use left alignment for readable text and metrics.",
+    "Create depth through generous padding, layered cards, and subtle shadow elevations.",
+    "Never use generic placeholder characters like 🤖. Follow the Lumi aesthetic.",
+    "Always apply modern button styles (pill-shaped) with active opacity feedback (TouchableOpacity).",
+    "Avoid AI slop. Keep UI intentional, calming, and highly functional like Apple Health and Notion."
   ]
 }
