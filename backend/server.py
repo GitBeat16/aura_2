@@ -1419,6 +1419,93 @@ async def spotify_add_tracks(playlist_id: str, payload: AddTracksPayload, user=D
         raise HTTPException(status_code=e.response.status_code, detail=e.response.text[:200])
 
 
+# =========================== LUMI'S DAILY TAKE ===========================
+class DailyTakeRequest(BaseModel):
+    lat: Optional[float] = None
+    lon: Optional[float] = None
+
+
+@api_router.post("/lumi/daily-take")
+async def lumi_daily_take(payload: DailyTakeRequest, user=Depends(get_current_user)):
+    """A warm contextual snippet from Lumi based on weather + time + latest mood.
+    Powers the smart Home hero card."""
+    lat = payload.lat if payload.lat is not None else 37.7749
+    lon = payload.lon if payload.lon is not None else -122.4194
+
+    # Weather
+    weather = {"condition": "clear", "is_day": True, "temperature_c": None}
+    try:
+        async with httpx.AsyncClient(timeout=6) as c:
+            r = await c.get(
+                "https://api.open-meteo.com/v1/forecast",
+                params={"latitude": lat, "longitude": lon, "current_weather": "true"},
+            )
+            data = r.json().get("current_weather") or {}
+            code = data.get("weathercode", 1)
+            weather = {
+                "condition": WEATHER_CODES.get(int(code) if code is not None else 1, "clear"),
+                "is_day": bool(data.get("is_day", 1)),
+                "temperature_c": data.get("temperature"),
+            }
+    except Exception:
+        pass
+
+    # Mood
+    latest_mood = await db.moods.find_one(
+        {"user_id": user["id"]}, {"_id": 0}, sort=[("created_at", -1)]
+    )
+    mood = (latest_mood or {}).get("mood", "okay")
+    now = datetime.now(timezone.utc)
+    hour = now.hour
+    tod = _time_of_day(hour)
+
+    system = (
+        "You are Lumi, a warm AI companion. Given the user's current weather, time of day, and mood, "
+        "write TWO short lines that feel like a friend noticing the sky.\n\n"
+        "Return ONLY a JSON object (no code fences):\n"
+        '  "headline": 3-6 word poetic reaction to the weather+time (e.g., "Soft golden afternoon.")\n'
+        '  "suggestion": 1 warm sentence proposing ONE small local thing to do (e.g., "The light is perfect for a walk to a garden — want to?"). Max 150 chars.\n'
+        '  "icon": one of: sun, cloud, cloud-rain, cloud-snow, cloud-drizzle, wind, moon, sunrise, sunset (choose what fits best)\n'
+        "No emojis. No hashtags. Warm tone."
+    )
+    prompt = (
+        f"Weather: {weather['condition']} ({'day' if weather['is_day'] else 'night'})\n"
+        f"Temperature: {weather.get('temperature_c')}°C\n"
+        f"Time: {tod} ({hour}:00)\n"
+        f"User mood: {mood}"
+    )
+
+    headline = weather["condition"].replace("-", " ").title() + "."
+    suggestion = "A gentle time to check in with yourself."
+    icon = "sun"
+    try:
+        chat = LlmChat(
+            api_key=EMERGENT_LLM_KEY,
+            session_id=f"take-{user['id']}-{now.strftime('%Y%m%d%H')}",
+            system_message=system,
+        ).with_model("anthropic", "claude-sonnet-4-6")
+        raw = (await chat.send_message(UserMessage(text=prompt))).strip()
+        import json as _json
+        import re as _re
+        m = _re.search(r"\{.*\}", raw, _re.DOTALL)
+        if m:
+            parsed = _json.loads(m.group(0))
+            headline = str(parsed.get("headline") or headline)[:40]
+            suggestion = str(parsed.get("suggestion") or suggestion)[:180]
+            icon = str(parsed.get("icon") or icon).strip().lower()
+    except Exception as e:
+        logger.warning(f"daily take failed: {e}")
+
+    return {
+        "headline": headline,
+        "suggestion": suggestion,
+        "icon": icon,
+        "weather": weather,
+        "time_of_day": tod,
+        "mood": mood,
+    }
+
+
 # =========================== HEALTH ===========================
 @api_router.get("/")
 async def root():

@@ -12,7 +12,8 @@
       "supportsTablet": true,
       "bundleIdentifier": "com.emergent.mindfulbuddy.b7u7e0",
       "infoPlist": {
-        "NSMicrophoneUsageDescription": "Talk with Lumi using your voice."
+        "NSMicrophoneUsageDescription": "Talk with Lumi using your voice.",
+        "NSLocationWhenInUseUsageDescription": "Shape music and suggestions for your weather and neighborhood."
       }
     },
     "android": {
@@ -22,7 +23,7 @@
       },
       "edgeToEdgeEnabled": true,
       "package": "com.emergent.mindfulbuddy.b7u7e0",
-      "permissions": ["RECORD_AUDIO"]
+      "permissions": ["RECORD_AUDIO", "ACCESS_COARSE_LOCATION", "ACCESS_FINE_LOCATION"]
     },
     "web": {
       "bundler": "metro",

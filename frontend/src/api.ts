@@ -154,6 +154,10 @@ export const api = {
   spotifyRecentlyPlayed: () => request<{ items: SpotifyTrack[] }>("/spotify/recently-played"),
   musicRecommendations: (lat?: number, lon?: number) =>
     request<MusicReco>("/music/recommendations", { method: "POST", body: { lat, lon } }),
+  lumiDailyTake: (lat?: number, lon?: number) =>
+    request<{ headline: string; suggestion: string; icon: string; weather: { condition: string; is_day: boolean; temperature_c: number | null }; time_of_day: string; mood: string }>(
+      "/lumi/daily-take", { method: "POST", body: { lat, lon } }
+    ),
   spotifyCreatePlaylist: (name: string, description: string, track_uris: string[]) =>
     request<SpotifyPlaylist>("/spotify/playlists", {
       method: "POST", body: { name, description, track_uris },
